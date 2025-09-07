@@ -3,9 +3,9 @@ set -euo pipefail
 
 # ===  ===
 PY_VER="3.10"
-ENV_NAME="diffusion"
-REPO_URL="https://github.com/yliu-fort/DDPM-minimal.git"
-REPO_DIR="/data/DDPM-minimal"
+ENV_NAME="visual"
+REPO_URL="https://github.com/yliu-fort/Visual-minimal.git"
+REPO_DIR="/data/Visual-minimal"
 
 echo "[*] Updating packages..."
 sudo apt-get update -y
@@ -46,10 +46,10 @@ echo
 echo "[] Init done."
 echo "To start working:"
 echo "cd $REPO_DIR"
-echo "PYTHONPATH="$PWD/src" python src/diffusion_sandbox/train.py --config configs/cifar10_uncond.yaml"
-echo "nohup env PYTHONPATH=/data/DDPM-minimal/src python src/diffusion_sandbox/train.py --config configs/cifar10_uncond.yaml > log.out 2>&1 &"
+echo "PYTHONPATH="$PWD/src" python src/visual/train.py --config configs/default.yaml"
+echo "nohup env PYTHONPATH=/data/DDPM-minimal/src python src/visual/train.py --config configs/default.yaml > log.out 2>&1 &"
 echo "nohup tensorboard --logdir runs --host 0.0.0.0 --port 6007 > tb.out 2>&1 &"
 
 cd $REPO_DIR
-nohup env PYTHONPATH="$PWD/src" python src/diffusion_sandbox/train.py --config configs/cifar10_uncond.yaml > log.out 2>&1 &
+nohup env PYTHONPATH="$PWD/src" python src/visual/train.py --config configs/default.yaml > log.out 2>&1 &
 nohup tensorboard --logdir runs --host 0.0.0.0 --port 6007 > tb.out 2>&1 &
