@@ -108,16 +108,18 @@ def main() -> None:
             images, labels = images.to(device), labels.to(device)
             logits = model(images)
             loss = criterion(logits, labels)
+
             opt.zero_grad(set_to_none=True)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             opt.step()
+            scheduler.step()
+
             preds = logits.argmax(dim=1)
             tr_correct += (preds == labels).sum().item()
             bs = images.size(0)
             tr_total += bs
             tr_loss_sum += loss.item() * bs
-            global_step += 1
             epoch_train_loss = tr_loss_sum / max(tr_total, 1)
             epoch_train_acc = tr_correct / max(tr_total, 1)
 

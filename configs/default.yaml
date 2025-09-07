@@ -18,7 +18,7 @@ data:
       download: true
       class_conditional: true
       cf_guidance_p: 0.0
-      img_size: 32
+      img_size: 224 # Default size for pretrained resnet model
 
 model:
   name: "resnet18"
@@ -33,7 +33,7 @@ train:
   grad_clip: 1.0
   log_interval: 50
   ckpt_interval: 10
-  sample_interval: 5000
+  sample_interval: 1
   sample_size: 64
   checkpoint_dir: "runs/checkpoints"   # where to save
   save_every_steps: 1000               # autosave cadence
