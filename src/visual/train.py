@@ -174,14 +174,10 @@ def main() -> None:
                 val_loss = val_loss_sum / max(val_total, 1)
                 val_acc = val_correct / max(val_total, 1)
 
-                logger.log_metrics(
-                {"epoch": epoch,
-                "train/epoch_loss": epoch_train_loss,
-                "train/epoch_acc": epoch_train_acc,
-                "val/loss": val_loss,
-                "val/acc": val_acc},
-                step=global_step,
-                )
+                logger.log_metric("train/epoch_loss", epoch_train_loss, global_step)
+                logger.log_metric("train/epoch_acc", epoch_train_acc, global_step)
+                logger.log_metric("val/loss", val_loss, global_step)
+                logger.log_metric("val/acc", val_acc, global_step)
 
 
         if epoch % cfg.train.ckpt_interval == 0 or epoch == cfg.train.epochs:
