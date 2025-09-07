@@ -1,0 +1,5 @@
+/runs/**
+*.pyc
+**/.DS_Store
+.DS_Store
+/examples/figures/**

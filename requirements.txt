@@ -1,0 +1,15 @@
+numpy>=1.26
+matplotlib>=3.8
+pyyaml>=6.0
+torch>=2.2
+torchvision>=0.17
+tensorboard>=2.16
+timm>=1.0.7
+diffusers>=0.29.0
+# Optional
+mlflow>=2.12
+# Coding style tools (for developer)
+black>=24.3
+ruff>=0.4
+isort>=5.13
+mypy>=1.10
