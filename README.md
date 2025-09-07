@@ -94,22 +94,6 @@ ruff check .
 mypy src tests
 ```
 
-## Dataset Visualization
-
-```bash
-python scripts/visualise_datasets.py
-```
-
-After running, the following visualization images will be generated in the `examples/figures/` directory:
-- gmm.png - Gaussian Mixture Model
-- ring.png - Ring distribution
-- two_moons.png - Two moons distribution
-- concentric.png - Concentric circles distribution
-- spiral.png - Spiral distribution
-- checkerboard.png - Checkerboard distribution
-- pinwheel.png - Pinwheel distribution
-- swiss_roll2d.png - Swiss roll distribution
-
 ## Checkpoint Management
 
 The framework provides intelligent checkpoint management features:
