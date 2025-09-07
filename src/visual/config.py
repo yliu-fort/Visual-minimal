@@ -29,6 +29,7 @@ class ModelCfg:
     input_dim: int = 2
     pretrained: bool = False
     name: str = "resnet18"
+    common: Optional[Dict[str, Any]] = None
 
 @dataclass
 class TrainCfg:
