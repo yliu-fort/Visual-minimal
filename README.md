@@ -2,7 +2,7 @@
 
 A clean and feature-complete visual classifier training framework: YAML configuration, deterministic training, experiment tracking and logging, unit tests, type checking and code style tools.
 
-![CIFAR10 Classification Example](./examples/cifar10.png)
+![CIFAR10 Classification Example](./examples/cifar10_val_acc.png)
 
 ## Features
 
