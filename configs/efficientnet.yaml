@@ -21,7 +21,7 @@ data:
       img_size: 224 # Default size for pretrained resnet model
 
 model:
-  name: "efficientnet_b1"
+  name: "efficientnet_b0"
   common:
     num_classes: 10
     pretrained: false
