@@ -8,7 +8,7 @@ from torch.optim import AdamW
 from visual.config import load_config, cfg_to_dict
 from visual.seed import set_all_seeds
 from visual.logger import RunLogger
-from visual.image_data import build_riichi_dataloader
+from visual.image_data import build_cifar10_dataloader, build_riichi_dataloader
 
 from visual.model import VisualClassifier
 
@@ -21,7 +21,7 @@ from visual.checkpointing import (
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
-    p.add_argument("--config", type=str, default="configs/riichi.yaml")
+    p.add_argument("--config", type=str, default="configs/default.yaml")
     return p.parse_args()
 
 def asdict_maybe(obj):
@@ -32,27 +32,6 @@ def asdict_maybe(obj):
     if isinstance(obj, dict):
         return obj
     return {}
-
-# ----------------------------
-# Loss utility (masked CE)
-# ----------------------------
-class MaskedCrossEntropy(torch.nn.Module):
-    """Cross-entropy with a (34,) mask where 0-weight classes are ignored.
-    Assumes logits shape (B, 34) and targets shape (B,).
-    """
-    def __init__(self, eps: float = 1e-9):
-        super().__init__()
-        self.eps = eps
-
-    def forward(self, logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        # logits: (B,34); mask: (B,34) or (34,)
-        if mask.dim() == 1:
-            mask = mask.unsqueeze(0).expand(logits.size(0), -1)
-        # set very negative logits on illegal classes so softmax prob ~0
-        neg_inf = -1e9
-        masked_logits = logits.clone()
-        masked_logits[mask <= 0.0] = neg_inf
-        return torch.nn.functional.cross_entropy(masked_logits, targets)
     
 def main() -> None:
     args = parse_args()
@@ -71,8 +50,8 @@ def main() -> None:
     logger.log_params({"config_path": args.config, **cfg.__dict__["run"].__dict__})
 
     # Data
-    if cfg.data.name == "riichi":
-        dl, dl_tst = build_riichi_dataloader(
+    if cfg.data.name == "cifar10":
+        dl, dl_tst = build_cifar10_dataloader(
             root=cfg.data.cfg[cfg.data.name]["root"],
             batch_size=cfg.data.batch_size,
             num_workers=cfg.data.num_workers,
@@ -81,7 +60,7 @@ def main() -> None:
             img_size=cfg.data.cfg[cfg.data.name]["img_size"],
             cf_guidance_p=cfg.data.cfg[cfg.data.name]["cf_guidance_p"],
         )
-        sample_shape = (cfg.train.sample_size, 29, cfg.data.cfg[cfg.data.name]["img_size"], cfg.data.cfg[cfg.data.name]["img_size"])
+        sample_shape = (cfg.train.sample_size, 3, cfg.data.cfg[cfg.data.name]["img_size"], cfg.data.cfg[cfg.data.name]["img_size"])
     else:
         return
     
@@ -125,7 +104,7 @@ def main() -> None:
     for epoch in range(start_epoch, cfg.train.epochs + 1):
         model.train()
         tr_loss_sum, tr_correct, tr_total = 0.0, 0, 0
-        for images, labels, masks in dl:
+        for images, labels in dl:
             images, labels = images.to(device), labels.to(device)
             logits = model(images)
             loss = criterion(logits, labels)
@@ -185,7 +164,7 @@ def main() -> None:
                 model.eval()
                 # Validation
                 val_loss_sum, val_correct, val_total = 0.0, 0, 0
-                for images, labels, masks in dl_tst:
+                for images, labels in dl_tst:
                     images, labels = images.to(device), labels.to(device)
                     logits = model(images)
                     loss = criterion(logits, labels)
