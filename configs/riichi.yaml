@@ -11,7 +11,7 @@ data:
   name: "riichi"
   num_samples: 50000
   batch_size: 128
-  num_workers: 8
+  num_workers: 4
   cfg:
     riichi:
       root: "../MajhongEnv/output"
