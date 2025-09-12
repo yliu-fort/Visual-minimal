@@ -181,7 +181,27 @@ def main() -> None:
                     logger.close()
                     return
 
-        if epoch % cfg.train.sample_interval == 0 or epoch == cfg.train.epochs or global_step % save_every == 0:
+            if global_step % save_every == 0:
+                with torch.no_grad():
+                    model.eval()
+                    # Validation
+                    val_loss_sum, val_correct, val_total = 0.0, 0, 0
+                    for images, labels, masks in dl_tst:
+                        images, labels = images.to(device), labels.to(device)
+                        logits = model(images)
+                        loss = criterion(logits, labels)
+                        val_loss_sum += loss.item() * images.size(0)
+                        val_correct += (logits.argmax(dim=1) == labels).sum().item()
+                        val_total += images.size(0)
+                    val_loss = val_loss_sum / max(val_total, 1)
+                    val_acc = val_correct / max(val_total, 1)
+
+                    logger.log_metric("train/epoch_loss", epoch_train_loss, global_step)
+                    logger.log_metric("train/epoch_acc", epoch_train_acc, global_step)
+                    logger.log_metric("val/loss", val_loss, global_step)
+                    logger.log_metric("val/acc", val_acc, global_step)
+
+        if epoch % cfg.train.sample_interval == 0 or epoch == cfg.train.epochs:
             with torch.no_grad():
                 model.eval()
                 # Validation
