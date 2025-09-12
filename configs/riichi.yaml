@@ -27,7 +27,7 @@ model:
     pretrained: false
 
 train:
-  epochs: 100
+  epochs: 10
   lr: 2.0e-4
   weight_decay: 0.0
   grad_clip: 1.0
@@ -36,7 +36,7 @@ train:
   sample_interval: 1
   sample_size: 64
   checkpoint_dir: "runs/checkpoints"   # where to save
-  save_every_steps: 10000               # autosave cadence
+  save_every_steps: 1000               # autosave cadence
   keep_last_k: 3                       # how many checkpoints to retain
   resume_from: "latest"                # "", path/to/ckpt.pt, or "latest"
   save_best_on: "val_acc"             # (TODO) metric name in your eval dict
