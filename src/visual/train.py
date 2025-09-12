@@ -9,6 +9,7 @@ from visual.config import load_config, cfg_to_dict
 from visual.seed import set_all_seeds
 from visual.logger import RunLogger
 from visual.riichi_data import build_riichi_dataloader
+from visual.riichi_dataset_loader import NUM_FEATURES
 
 from visual.model import VisualClassifier
 
@@ -88,7 +89,7 @@ def main() -> None:
     # Model & Diffusion
     name = getattr(cfg.model, "name", "resnet18")
     common = asdict_maybe(getattr(cfg.model, "common", None))
-    model = VisualClassifier(backbone=name, **common).to(device)
+    model = VisualClassifier(backbone=name, in_chans=NUM_FEATURES, **common).to(device)
     criterion = nn.CrossEntropyLoss()
 
     opt = AdamW(model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay)
