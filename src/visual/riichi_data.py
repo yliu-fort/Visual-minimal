@@ -88,6 +88,7 @@ def build_riichi_dataloader(
         num_workers=num_workers,
         drop_last=True,
         collate_fn=collate,
+        prefetch_factor=2
     ), DataLoader(
         ds_tst,
         batch_size=batch_size,
