@@ -50,7 +50,6 @@ class RiichiDatasetZarr(Dataset):
             self._imgs = self._g["images"]
             self._lbls = self._g["labels"]
             self._msks = self._g["masks"]
-            self._fns  = self._g["filenames"]
 
     def __len__(self):
         return len(self.indices)
