@@ -181,7 +181,7 @@ def main() -> None:
                     logger.close()
                     return
 
-        if epoch % cfg.train.sample_interval == 0 or epoch == cfg.train.epochs:
+        if epoch % cfg.train.sample_interval == 0 or epoch == cfg.train.epochs or global_step % save_every == 0:
             with torch.no_grad():
                 model.eval()
                 # Validation
