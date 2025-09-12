@@ -18,7 +18,7 @@ class RunCfg:
 
 @dataclass
 class DataCfg:
-    name: Literal["cifar10", "mnist"]
+    name: Literal["cifar10", "mnist", "riichi"]
     num_samples: int
     batch_size: int
     num_workers: int

@@ -8,7 +8,7 @@ from torch.optim import AdamW
 from visual.config import load_config, cfg_to_dict
 from visual.seed import set_all_seeds
 from visual.logger import RunLogger
-from visual.image_data import build_cifar10_dataloader
+from visual.image_data import build_cifar10_dataloader, build_riichi_dataloader
 
 from visual.model import VisualClassifier
 
@@ -33,6 +33,27 @@ def asdict_maybe(obj):
         return obj
     return {}
 
+# ----------------------------
+# Loss utility (masked CE)
+# ----------------------------
+class MaskedCrossEntropy(torch.nn.Module):
+    """Cross-entropy with a (34,) mask where 0-weight classes are ignored.
+    Assumes logits shape (B, 34) and targets shape (B,).
+    """
+    def __init__(self, eps: float = 1e-9):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        # logits: (B,34); mask: (B,34) or (34,)
+        if mask.dim() == 1:
+            mask = mask.unsqueeze(0).expand(logits.size(0), -1)
+        # set very negative logits on illegal classes so softmax prob ~0
+        neg_inf = -1e9
+        masked_logits = logits.clone()
+        masked_logits[mask <= 0.0] = neg_inf
+        return torch.nn.functional.cross_entropy(masked_logits, targets)
+    
 def main() -> None:
     args = parse_args()
     cfg = load_config(args.config)
@@ -61,6 +82,17 @@ def main() -> None:
             cf_guidance_p=cfg.data.cfg[cfg.data.name]["cf_guidance_p"],
         )
         sample_shape = (cfg.train.sample_size, 3, cfg.data.cfg[cfg.data.name]["img_size"], cfg.data.cfg[cfg.data.name]["img_size"])
+    elif cfg.data.name == "riichi":
+        dl, dl_tst = build_riichi_dataloader(
+            root=cfg.data.cfg[cfg.data.name]["root"],
+            batch_size=cfg.data.batch_size,
+            num_workers=cfg.data.num_workers,
+            download=cfg.data.cfg[cfg.data.name]["download"],
+            class_conditional=cfg.data.cfg[cfg.data.name]["class_conditional"],
+            img_size=cfg.data.cfg[cfg.data.name]["img_size"],
+            cf_guidance_p=cfg.data.cfg[cfg.data.name]["cf_guidance_p"],
+        )
+        sample_shape = (cfg.train.sample_size, 29, cfg.data.cfg[cfg.data.name]["img_size"], cfg.data.cfg[cfg.data.name]["img_size"])
     else:
         return
     

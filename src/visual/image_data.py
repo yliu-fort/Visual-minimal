@@ -47,7 +47,10 @@ def build_riichi_dataloader(
     # The dataset stores pre-computed tensors.  ``download``/``img_size`` and
     # ``cf_guidance_p`` are not required but kept to match the interface of the
     # other builders.
-    ds = RiichiDatasetZarr(root, return_mask=True)
+    ds = RiichiDatasetZarr(root, transform=tfm, return_mask=True)
+    tfm = transforms.Compose([
+        transforms.Resize(img_size)
+    ])
 
     if class_conditional:
         # Each sample is (image, label, mask).  We want to stack the images and
