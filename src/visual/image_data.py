@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
@@ -47,7 +48,8 @@ def build_riichi_dataloader(
     # The dataset stores pre-computed tensors.  ``download``/``img_size`` and
     # ``cf_guidance_p`` are not required but kept to match the interface of the
     # other builders.
-    ds = RiichiDatasetZarr(root, transform=tfm, return_mask=True)
+    ds = RiichiDatasetZarr(os.path.join(root, "training"), transform=tfm, return_mask=True)
+    ds_tst = RiichiDatasetZarr(os.path.join(root, "test"), transform=tfm, return_mask=True)
     tfm = transforms.Compose([
         transforms.Resize(img_size)
     ])
@@ -71,6 +73,13 @@ def build_riichi_dataloader(
 
     return DataLoader(
         ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        drop_last=True,
+        collate_fn=collate,
+    ), DataLoader(
+        ds_tst,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
