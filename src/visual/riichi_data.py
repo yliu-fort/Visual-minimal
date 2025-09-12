@@ -5,6 +5,16 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from riichi_dataset_loader import RiichiDatasetZarr
 
+# DataLoader workers on some systems may encounter "bus error" crashes when
+# the default shared memory strategy is used.  To avoid relying on `/dev/shm`,
+# switch to the more robust file-system based sharing strategy.
+try:
+    torch.multiprocessing.set_sharing_strategy("file_system")
+except RuntimeError:
+    # If the strategy cannot be set (e.g. unsupported backend) we simply
+    # proceed with the default behaviour.
+    pass
+
 def build_riichi_dataloader(
     root: str,
     batch_size: int,
