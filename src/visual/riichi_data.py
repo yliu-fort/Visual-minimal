@@ -44,15 +44,15 @@ def build_riichi_dataloader(
     torch.utils.data.DataLoader
         A dataloader yielding batches from ``RiichiDatasetZarr``.
     """
+    tfm = transforms.Compose([
+        transforms.Resize(img_size)
+    ])
 
     # The dataset stores pre-computed tensors.  ``download``/``img_size`` and
     # ``cf_guidance_p`` are not required but kept to match the interface of the
     # other builders.
     ds = RiichiDatasetZarr(os.path.join(root, "training"), transform=tfm, return_mask=True)
     ds_tst = RiichiDatasetZarr(os.path.join(root, "test"), transform=tfm, return_mask=True)
-    tfm = transforms.Compose([
-        transforms.Resize(img_size)
-    ])
 
     if class_conditional:
         # Each sample is (image, label, mask).  We want to stack the images and
