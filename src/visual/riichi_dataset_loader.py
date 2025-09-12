@@ -27,6 +27,7 @@ class RiichiDatasetZarr(Dataset):
         # 预读 N 以便 __len__
         g = zarr.open_group(root, mode="r")
         self.N = g["labels"].shape[0]
+        print(self.N)
         g.store.close() if hasattr(g.store, "close") else None
 
         if indices is None:
