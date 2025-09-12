@@ -10,12 +10,12 @@ except ImportError:
 
 
 class VisualClassifier(nn.Module):
-    def __init__(self, backbone: str = "resnet18", num_classes: int = 10, pretrained: bool = True):
+    def __init__(self, backbone: str = "resnet18", in_chans: int = 3, num_classes: int = 10, pretrained: bool = True):
         super().__init__()
         self.backbone_name = backbone.lower()
 
         try:
-            self.model = timm.create_model(self.backbone_name, pretrained=pretrained, num_classes=num_classes)
+            self.model = timm.create_model(self.backbone_name, pretrained=pretrained, num_classes=num_classes, in_chans=in_chans)
         except ValueError:
             raise ValueError(f"Unsupported backbone: {backbone}")
 
