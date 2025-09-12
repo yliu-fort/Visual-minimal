@@ -2,6 +2,10 @@ from __future__ import annotations
 import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+from riichi_dataset_loader import RiichiDatasetZarr
+
+def build_riichi_dataloader(root: str, batch_size: int, num_workers: int, download: bool, class_conditional: bool, img_size: int, cf_guidance_p: float):
+    pass
 
 def build_cifar10_dataloader(root: str, batch_size: int, num_workers: int, download: bool, class_conditional: bool, img_size: int, cf_guidance_p: float) -> DataLoader:
     tfm = transforms.Compose([

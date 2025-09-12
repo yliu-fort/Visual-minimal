@@ -13,3 +13,4 @@ black>=24.3
 ruff>=0.4
 isort>=5.13
 mypy>=1.10
+zarr>=3.0.0
