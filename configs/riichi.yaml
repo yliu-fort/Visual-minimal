@@ -9,7 +9,7 @@ run:
 
 data:
   name: "riichi"
-  num_samples: 50000
+  num_samples: 65000000
   batch_size: 128
   num_workers: 4
   cfg:
@@ -36,7 +36,7 @@ train:
   sample_interval: 1
   sample_size: 64
   checkpoint_dir: "runs/checkpoints"   # where to save
-  save_every_steps: 1000               # autosave cadence
+  save_every_steps: 5000000               # autosave cadence
   keep_last_k: 3                       # how many checkpoints to retain
   resume_from: "latest"                # "", path/to/ckpt.pt, or "latest"
   save_best_on: "val_acc"             # (TODO) metric name in your eval dict
