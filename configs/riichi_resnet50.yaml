@@ -1,0 +1,52 @@
+run:
+  experiment_name: "resnet50_riichi_discard"
+  output_dir: "runs"
+  seed: 42
+  device: "auto"
+  cudnn:
+    benchmark: false
+    deterministic: true
+
+data:
+  name: "riichi"
+  num_samples: 65000000
+  batch_size: 128
+  num_workers: 4
+  cfg:
+    riichi:
+      root: "../MajhongEnv/output"
+      download: true
+      class_conditional: true
+      cf_guidance_p: 0.0
+      img_size: 224 # Default size for pretrained resnet model
+
+model:
+  name: "resnet50"
+  common:
+    num_classes: 34
+    pretrained: false
+
+train:
+  epochs: 10
+  lr: 2.0e-4
+  weight_decay: 0.05
+  grad_clip: 1.0
+  log_interval: 50
+  ckpt_interval: 1
+  sample_interval: 1
+  sample_size: 64
+  checkpoint_dir: "runs/checkpoints"   # where to save
+  save_every_steps: 20000               # autosave cadence
+  keep_last_k: 3                       # how many checkpoints to retain
+  resume_from: "latest"                # "", path/to/ckpt.pt, or "latest"
+  save_best_on: "val_acc"             # (TODO) metric name in your eval dict
+  save_rng_state: true                 # restore RNG for exact reproducibility
+  warmup: 5000
+
+# Tracking & Logging
+tracking:
+  tensorboard: true
+  mlflow:
+    enabled: false
+    tracking_uri: "file:./mlruns"
+    experiment_name: "resnet50_riichi"
