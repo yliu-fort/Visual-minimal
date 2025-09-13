@@ -20,6 +20,39 @@ from visual.checkpointing import (
     prune_old,
 )
 
+class EMA:
+    def __init__(self, model, decay=0.9999):
+        self.model = model
+        self.decay = decay
+        self.shadow = {
+            name: p.clone().detach()
+            for name, p in model.state_dict().items()
+        }
+
+    @torch.no_grad()
+    def update(self):
+        for name, param in self.model.state_dict().items():
+            if param.dtype.is_floating_point:
+                self.shadow[name].mul_(self.decay).add_(param, alpha=1 - self.decay)
+
+    def copy_to(self, model):
+        model.load_state_dict(self.shadow, strict=False)
+
+    def state_dict(self):
+        """Save EMA parameter"""
+        return {
+            "decay": self.decay,
+            "shadow": self.shadow
+        }
+
+    def load_state_dict(self, state_dict):
+        """Restore EMA parameter"""
+        self.decay = state_dict["decay"]
+        self.shadow = {
+            k: v.clone().detach()
+            for k, v in state_dict["shadow"].items()
+        }
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--config", type=str, default="configs/riichi.yaml")
@@ -105,11 +138,23 @@ def main() -> None:
     common = asdict_maybe(getattr(cfg.model, "common", None))
     model = VisualClassifier(backbone=name, in_chans=NUM_FEATURES, **common).to(device)
     criterion = MaskedCrossEntropy()
-
     opt = AdamW(model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay)
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        opt, lr_lambda=lambda step: min(1.0, step/cfg.train.warmup)
+    # 线性 warmup：从极小倍率线性升到 1.0
+    warmup = torch.optim.lr_scheduler.LinearLR(
+        opt,
+        start_factor=1e-8,            # 避免 0 / 小到几乎 0
+        end_factor=1.0,
+        total_iters=cfg.train.warmup,
     )
+    # 余弦衰减：从 base_lr 下降到 eta_min
+    cosine = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        opt,
+        T_max=100000,
+        eta_min=cfg.train.lr * cfg.train.weight_decay,  # 各 param group 等比例
+    )
+    scheduler = torch.optim.lr_scheduler.SequentialLR(opt, schedulers=[warmup, cosine], milestones=[cfg.train.warmup])
+    ema = EMA(model, decay=cfg.train.ema_decay)
+    
     global_step = 0
 
     # ---------- checkpoint dir & resume ----------
@@ -124,7 +169,7 @@ def main() -> None:
         optimizer=opt,
         scheduler=scheduler,
         scaler=None,
-        ema=None,
+        ema=ema,
         strict=True,
         restore_rng=getattr(cfg.train, "save_rng_state", True),
     )
@@ -150,6 +195,7 @@ def main() -> None:
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             opt.step()
             scheduler.step()
+            ema.update()
 
             preds = classify(logits, masks)
             correct_ = (preds == labels).sum().item()
@@ -176,7 +222,7 @@ def main() -> None:
                     optimizer=opt,
                     scheduler=scheduler,
                     scaler=None,
-                    ema=None,
+                    ema=ema,
                     step=global_step,
                     epoch=epoch,
                     config=cfg_to_dict(cfg),
@@ -200,11 +246,13 @@ def main() -> None:
             if global_step % save_every == 0:
                 with torch.no_grad():
                     model.eval()
+                    ema_model = copy.deepcopy(model)
+                    ema.copy_to(ema_model)
                     # Validation
                     val_loss_sum, val_correct, val_total = 0.0, 0, 0
                     for images, labels, masks in dl_tst:
                         images, labels, masks = images.to(device), labels.to(device), masks.to(device)
-                        logits = model(images)
+                        logits = ema_model(images)
                         loss = criterion(logits, labels, masks)
                         val_loss_sum += loss.item() * images.size(0)
                         val_correct += (classify(logits, masks) == labels).sum().item()
@@ -220,11 +268,13 @@ def main() -> None:
         if epoch % cfg.train.sample_interval == 0 or epoch == cfg.train.epochs:
             with torch.no_grad():
                 model.eval()
+                ema_model = copy.deepcopy(model)
+                ema.copy_to(ema_model)
                 # Validation
                 val_loss_sum, val_correct, val_total = 0.0, 0, 0
                 for images, labels, masks in dl_tst:
                     images, labels, masks = images.to(device), labels.to(device), masks.to(device)
-                    logits = model(images)
+                    logits = ema_model(images)
                     loss = criterion(logits, labels, masks)
                     val_loss_sum += loss.item() * images.size(0)
                     val_correct += (classify(logits, masks) == labels).sum().item()
@@ -247,7 +297,7 @@ def main() -> None:
                 optimizer=opt,
                 scheduler=scheduler,
                 scaler=None,
-                ema=None,
+                ema=ema,
                 step=global_step,
                 epoch=epoch,
                 config=cfg_to_dict(cfg),
