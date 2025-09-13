@@ -49,12 +49,26 @@ class MaskedCrossEntropy(torch.nn.Module):
         # logits: (B,34); mask: (B,34) or (34,)
         if mask.dim() == 1:
             mask = mask.unsqueeze(0).expand(logits.size(0), -1)
-        # set very negative logits on illegal classes so softmax prob ~0
-        neg_inf = -1e9
-        masked_logits = logits.clone()
-        masked_logits[mask <= 0.0] = neg_inf
+
+        # 用 masked_fill + 可靠的负大数（或 -inf）
+        neg_large = -torch.finfo(logits.dtype).max  # 避免混合精度下的数值问题
+        masked_logits = logits.masked_fill(mask <= 0, neg_large)
+
         return torch.nn.functional.cross_entropy(masked_logits, targets)
     
+
+def classify(logits: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    # logits: (B,34); mask: (B,34) or (34,)
+    if mask.dim() == 1:
+        mask = mask.unsqueeze(0).expand(logits.size(0), -1)
+
+    # 用 masked_fill + 可靠的负大数（或 -inf）
+    neg_large = -torch.finfo(logits.dtype).max  # 避免混合精度下的数值问题
+    masked_logits = logits.masked_fill(mask <= 0, neg_large)
+
+    return masked_logits.argmax(dim=1)
+    
+
 def main() -> None:
     args = parse_args()
     cfg = load_config(args.config)
@@ -137,7 +151,7 @@ def main() -> None:
             opt.step()
             scheduler.step()
 
-            preds = logits.argmax(dim=1)
+            preds = classify(logits, masks)
             correct_ = (preds == labels).sum().item()
             tr_correct += correct_
             bs = images.size(0)
@@ -193,7 +207,7 @@ def main() -> None:
                         logits = model(images)
                         loss = criterion(logits, labels, masks)
                         val_loss_sum += loss.item() * images.size(0)
-                        val_correct += (logits.argmax(dim=1) == labels).sum().item()
+                        val_correct += (classify(logits, masks) == labels).sum().item()
                         val_total += images.size(0)
                     val_loss = val_loss_sum / max(val_total, 1)
                     val_acc = val_correct / max(val_total, 1)
@@ -209,11 +223,11 @@ def main() -> None:
                 # Validation
                 val_loss_sum, val_correct, val_total = 0.0, 0, 0
                 for images, labels, masks in dl_tst:
-                    images, labels = images.to(device), labels.to(device)
+                    images, labels, masks = images.to(device), labels.to(device), masks.to(device)
                     logits = model(images)
-                    loss = criterion(logits, labels)
+                    loss = criterion(logits, labels, masks)
                     val_loss_sum += loss.item() * images.size(0)
-                    val_correct += (logits.argmax(dim=1) == labels).sum().item()
+                    val_correct += (classify(logits, masks) == labels).sum().item()
                     val_total += images.size(0)
                 val_loss = val_loss_sum / max(val_total, 1)
                 val_acc = val_correct / max(val_total, 1)
