@@ -47,6 +47,8 @@ class MaskedCrossEntropy(torch.nn.Module):
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         # logits: (B,34); mask: (B,34) or (34,)
+        if not mask:
+            return torch.nn.functional.cross_entropy(logits, targets)
         if mask.dim() == 1:
             mask = mask.unsqueeze(0).expand(logits.size(0), -1)
         # set very negative logits on illegal classes so softmax prob ~0
@@ -82,7 +84,7 @@ def main() -> None:
             img_size=cfg.data.cfg[cfg.data.name]["img_size"],
             cf_guidance_p=cfg.data.cfg[cfg.data.name]["cf_guidance_p"],
         )
-        sample_shape = (cfg.train.sample_size, 29, cfg.data.cfg[cfg.data.name]["img_size"], cfg.data.cfg[cfg.data.name]["img_size"])
+        sample_shape = (cfg.train.sample_size, NUM_FEATURES, cfg.data.cfg[cfg.data.name]["img_size"], cfg.data.cfg[cfg.data.name]["img_size"])
     else:
         return
     
@@ -90,7 +92,7 @@ def main() -> None:
     name = getattr(cfg.model, "name", "resnet18")
     common = asdict_maybe(getattr(cfg.model, "common", None))
     model = VisualClassifier(backbone=name, in_chans=NUM_FEATURES, **common).to(device)
-    criterion = nn.CrossEntropyLoss()
+    criterion = MaskedCrossEntropy()
 
     opt = AdamW(model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
@@ -127,9 +129,9 @@ def main() -> None:
         model.train()
         tr_loss_sum, tr_correct, tr_total = 0.0, 0, 0
         for images, labels, masks in dl:
-            images, labels = images.to(device), labels.to(device)
+            images, labels, masks = images.to(device), labels.to(device), masks.to(device)
             logits = model(images)
-            loss = criterion(logits, labels)
+            loss = criterion(logits, labels, masks)
 
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -138,7 +140,8 @@ def main() -> None:
             scheduler.step()
 
             preds = logits.argmax(dim=1)
-            tr_correct += (preds == labels).sum().item()
+            correct_ = (preds == labels).sum().item()
+            tr_correct += correct_
             bs = images.size(0)
             tr_total += bs
             tr_loss_sum += loss.item() * bs
@@ -148,6 +151,7 @@ def main() -> None:
             if global_step % cfg.train.log_interval == 0:
                 # metric
                 logger.log_metric("train/loss", loss.item(), global_step)
+                logger.log_metric("train/acc", correct_/bs, global_step)
             global_step += 1
 
             # ---------- autosave by step ----------
@@ -187,9 +191,9 @@ def main() -> None:
                     # Validation
                     val_loss_sum, val_correct, val_total = 0.0, 0, 0
                     for images, labels, masks in dl_tst:
-                        images, labels = images.to(device), labels.to(device)
+                        images, labels, masks = images.to(device), labels.to(device), masks.to(device)
                         logits = model(images)
-                        loss = criterion(logits, labels)
+                        loss = criterion(logits, labels, masks)
                         val_loss_sum += loss.item() * images.size(0)
                         val_correct += (logits.argmax(dim=1) == labels).sum().item()
                         val_total += images.size(0)
