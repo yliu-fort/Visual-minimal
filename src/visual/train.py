@@ -142,7 +142,7 @@ def main() -> None:
     # 线性 warmup：从极小倍率线性升到 1.0
     warmup = torch.optim.lr_scheduler.LinearLR(
         opt,
-        start_factor=1e-8,            # 避免 0 / 小到几乎 0
+        start_factor=1e-3,            # 避免 0 / 小到几乎 0
         end_factor=1.0,
         total_iters=cfg.train.warmup,
     )
