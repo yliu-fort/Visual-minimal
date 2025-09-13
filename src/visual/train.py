@@ -47,8 +47,6 @@ class MaskedCrossEntropy(torch.nn.Module):
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         # logits: (B,34); mask: (B,34) or (34,)
-        if not mask:
-            return torch.nn.functional.cross_entropy(logits, targets)
         if mask.dim() == 1:
             mask = mask.unsqueeze(0).expand(logits.size(0), -1)
         # set very negative logits on illegal classes so softmax prob ~0
