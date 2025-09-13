@@ -149,6 +149,7 @@ def main() -> None:
     # 余弦衰减：从 base_lr 下降到 eta_min
     cosine = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         opt,
+        T_mult=1.618,
         T_max=100000,
         eta_min=cfg.train.lr * cfg.train.weight_decay,  # 各 param group 等比例
     )
