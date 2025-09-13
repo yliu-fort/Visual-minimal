@@ -154,7 +154,7 @@ def main() -> None:
     )
     scheduler = torch.optim.lr_scheduler.SequentialLR(opt, schedulers=[warmup, cosine], milestones=[cfg.train.warmup])
     ema = EMA(model, decay=cfg.train.ema_decay)
-    
+
     global_step = 0
 
     # ---------- checkpoint dir & resume ----------
@@ -210,6 +210,7 @@ def main() -> None:
                 # metric
                 logger.log_metric("train/loss", loss.item(), global_step)
                 logger.log_metric("train/acc", correct_/bs, global_step)
+                logger.log_metric("train/learning_rate", scheduler.get_last_lr(), global_step)
             global_step += 1
 
             # ---------- autosave by step ----------
