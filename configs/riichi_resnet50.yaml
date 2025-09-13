@@ -10,7 +10,7 @@ run:
 data:
   name: "riichi"
   num_samples: 65000000
-  batch_size: 256
+  batch_size: 128
   num_workers: 4
   cfg:
     riichi:
