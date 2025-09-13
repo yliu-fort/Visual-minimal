@@ -154,7 +154,7 @@ def main() -> None:
         eta_min=cfg.train.lr * cfg.train.weight_decay,  # 各 param group 等比例
     )
     scheduler = torch.optim.lr_scheduler.SequentialLR(opt, schedulers=[warmup, cosine], milestones=[cfg.train.warmup])
-    ema = EMA(model, decay=cfg.train.ema_decay)
+    ema = EMA(model)
 
     global_step = 0
 
