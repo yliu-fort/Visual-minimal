@@ -211,7 +211,7 @@ def main() -> None:
                 # metric
                 logger.log_metric("train/loss", loss.item(), global_step)
                 logger.log_metric("train/acc", correct_/bs, global_step)
-                logger.log_metric("train/learning_rate", scheduler.get_last_lr().item(), global_step)
+                logger.log_metric("train/learning_rate", scheduler.get_last_lr()[0], global_step)
             global_step += 1
 
             # ---------- autosave by step ----------
