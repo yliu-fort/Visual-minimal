@@ -43,7 +43,7 @@ train:
   save_rng_state: true                 # restore RNG for exact reproducibility
   warmup: 5000 # For LinearScheduler
   min_lr_ratio: 0.1 # For CosineScheduler
-  label_smoothing: 0.05
+  label_smoothing: 0.0
   gradient_accumulation_steps: 4
   ema_decay: 0.9999
   
