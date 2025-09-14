@@ -1,5 +1,5 @@
 run:
-  experiment_name: "visual_cifar10_classify"
+  experiment_name: "resnet50_riichi_discard"
   output_dir: "runs"
   seed: 42
   device: "auto"
@@ -8,40 +8,45 @@ run:
     deterministic: true
 
 data:
-  name: "cifar10"
-  num_samples: 50000
+  name: "riichi"
+  num_samples: 65000000
   batch_size: 128
   num_workers: 4
   cfg:
-    cifar10:
-      root: "./data"
+    riichi:
+      root: "../MajhongEnv/output"
       download: true
       class_conditional: true
       cf_guidance_p: 0.0
       img_size: 224 # Default size for pretrained resnet model
 
 model:
-  name: "resnet18"
+  name: "resnet50"
   common:
-    num_classes: 10
+    num_classes: 34
     pretrained: false
 
 train:
-  epochs: 100
+  epochs: 10
   lr: 2.0e-4
   weight_decay: 0.0
   grad_clip: 1.0
   log_interval: 50
-  ckpt_interval: 10
+  ckpt_interval: 1
   sample_interval: 1
   sample_size: 64
   checkpoint_dir: "runs/checkpoints"   # where to save
-  save_every_steps: 1000               # autosave cadence
+  save_every_steps: 20000               # autosave cadence
   keep_last_k: 3                       # how many checkpoints to retain
   resume_from: "latest"                # "", path/to/ckpt.pt, or "latest"
   save_best_on: "val_acc"             # (TODO) metric name in your eval dict
   save_rng_state: true                 # restore RNG for exact reproducibility
-  warmup: 5000
+  warmup: 5000 # For LinearScheduler
+  min_lr_ratio: 0.1 # For CosineScheduler
+  label_smoothing: 0.0
+  gradient_accumulation_steps: 4
+  ema_decay: 0.9999
+  
 
 # Tracking & Logging
 tracking:
@@ -49,4 +54,4 @@ tracking:
   mlflow:
     enabled: false
     tracking_uri: "file:./mlruns"
-    experiment_name: "visual_cifar10"
+    experiment_name: "resnet50_riichi"
