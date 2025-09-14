@@ -48,6 +48,10 @@ class TrainCfg:
     save_best_on: str
     save_rng_state: bool
     warmup: int
+    min_lr_ratio: float
+    label_smoothing: float
+    gradient_accumulation_steps: int
+    ema_decay: float
 
 @dataclass
 class MlflowCfg:

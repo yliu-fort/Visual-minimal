@@ -74,9 +74,9 @@ class MaskedCrossEntropy(torch.nn.Module):
     """Cross-entropy with a (34,) mask where 0-weight classes are ignored.
     Assumes logits shape (B, 34) and targets shape (B,).
     """
-    def __init__(self, eps: float = 1e-9):
+    def __init__(self, label_smoothing: float = 0.0):
         super().__init__()
-        self.eps = eps
+        self.label_smoothing = label_smoothing
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         # logits: (B,34); mask: (B,34) or (34,)
@@ -87,7 +87,7 @@ class MaskedCrossEntropy(torch.nn.Module):
         neg_large = -torch.finfo(logits.dtype).max  # 避免混合精度下的数值问题
         masked_logits = logits.masked_fill(mask <= 0, neg_large)
 
-        return torch.nn.functional.cross_entropy(masked_logits, targets)
+        return torch.nn.functional.cross_entropy(masked_logits, targets, label_smoothing=self.label_smoothing)
     
 
 def classify(logits: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -137,7 +137,7 @@ def main() -> None:
     name = getattr(cfg.model, "name", "resnet18")
     common = asdict_maybe(getattr(cfg.model, "common", None))
     model = VisualClassifier(backbone=name, in_chans=NUM_FEATURES, **common).to(device)
-    criterion = MaskedCrossEntropy()
+    criterion = MaskedCrossEntropy(label_smoothing=cfg.train.label_smoothing)
     opt = AdamW(model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay)
     # 线性 warmup：从极小倍率线性升到 1.0
     warmup = torch.optim.lr_scheduler.LinearLR(
@@ -151,10 +151,10 @@ def main() -> None:
         opt,
         T_mult=2,
         T_0=100000,
-        eta_min=cfg.train.lr * cfg.train.weight_decay,  # 各 param group 等比例
+        eta_min=cfg.train.lr * cfg.train.min_lr_ratio,
     )
     scheduler = torch.optim.lr_scheduler.SequentialLR(opt, schedulers=[warmup, cosine], milestones=[cfg.train.warmup])
-    ema = EMA(model)
+    ema = EMA(model, decay=cfg.train.ema_decay)
 
     global_step = 0
 
@@ -175,6 +175,7 @@ def main() -> None:
         restore_rng=getattr(cfg.train, "save_rng_state", True),
     )
     global_step = start_step
+    accum_steps = getattr(cfg.train, "gradient_accumulation_steps", 1)
 
     # handle SIGINT/SIGTERM → save & exit cleanly
     stop_flag = {"stop": False}
@@ -186,86 +187,111 @@ def main() -> None:
     for epoch in range(start_epoch, cfg.train.epochs + 1):
         model.train()
         tr_loss_sum, tr_correct, tr_total = 0.0, 0, 0
-        for images, labels, masks in dl:
+
+        opt.zero_grad(set_to_none=True)
+        for it, (images, labels, masks) in enumerate(dl):
             images, labels, masks = images.to(device), labels.to(device), masks.to(device)
             logits = model(images)
             loss = criterion(logits, labels, masks)
 
-            opt.zero_grad(set_to_none=True)
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            opt.step()
-            scheduler.step()
-            ema.update()
+            # === 梯度累积：反传用缩放后的 loss ===
+            (loss / accum_steps).backward()
 
-            preds = classify(logits, masks)
-            correct_ = (preds == labels).sum().item()
-            tr_correct += correct_
-            bs = images.size(0)
-            tr_total += bs
-            tr_loss_sum += loss.item() * bs
-            epoch_train_loss = tr_loss_sum / max(tr_total, 1)
-            epoch_train_acc = tr_correct / max(tr_total, 1)
+            # 仅在累计满时做一次优化器更新 & 相关操作
+            if ((it + 1) % accum_steps) == 0:
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.train.grad_clip)
+                opt.step()
+                opt.zero_grad(set_to_none=True)
+                scheduler.step()
+                ema.update()
+                global_step += 1
 
-            if global_step % cfg.train.log_interval == 0:
-                # metric
-                logger.log_metric("train/loss", loss.item(), global_step)
-                logger.log_metric("train/acc", correct_/bs, global_step)
-                logger.log_metric("train/learning_rate", scheduler.get_last_lr()[0], global_step)
-            global_step += 1
+                preds = classify(logits, masks)
+                correct_ = (preds == labels).sum().item()
+                tr_correct += correct_
+                bs = images.size(0)
+                tr_total += bs
+                tr_loss_sum += loss.item() * bs
+                epoch_train_loss = tr_loss_sum / max(tr_total, 1)
+                epoch_train_acc = tr_correct / max(tr_total, 1)
 
-            # ---------- autosave by step ----------
-            save_every = int(getattr(cfg.train, "save_every_steps", 0))
-            if save_every and (global_step % save_every == 0 or stop_flag["stop"]):
-                step_path = ckpt_dir / f"step_{global_step}.pt"
-                save_checkpoint(
-                    path=str(step_path),
-                    model=model,
-                    optimizer=opt,
-                    scheduler=scheduler,
-                    scaler=None,
-                    ema=ema,
-                    step=global_step,
-                    epoch=epoch,
-                    config=cfg_to_dict(cfg),
-                    metrics=None,
-                    save_rng_state=getattr(cfg.train, "save_rng_state", True),
-                )
-                # refresh latest.pt (hardlink, fallback copy)
-                try:
-                    latest = ckpt_dir / "latest.pt"
-                    if latest.exists(): latest.unlink()
-                    os.link(step_path, latest)
-                except Exception:
-                    import shutil as _sh
-                    _sh.copy2(step_path, ckpt_dir / "latest.pt")
-                prune_old(str(ckpt_dir), int(getattr(cfg.train, "keep_last_k", 3)))
-                if stop_flag["stop"]:
-                    print("[signal] checkpoint saved; exiting.")
-                    logger.close()
-                    return
+                if global_step % cfg.train.log_interval == 0:
+                    # metric
+                    logger.log_metric("train/loss", loss.item(), global_step)
+                    logger.log_metric("train/acc", correct_/bs, global_step)
+                    logger.log_metric("train/learning_rate", scheduler.get_last_lr()[0], global_step)
 
-            if global_step % save_every == 0:
-                with torch.no_grad():
-                    model.eval()
-                    ema_model = copy.deepcopy(model)
-                    ema.copy_to(ema_model)
-                    # Validation
-                    val_loss_sum, val_correct, val_total = 0.0, 0, 0
-                    for images, labels, masks in dl_tst:
-                        images, labels, masks = images.to(device), labels.to(device), masks.to(device)
-                        logits = ema_model(images)
-                        loss = criterion(logits, labels, masks)
-                        val_loss_sum += loss.item() * images.size(0)
-                        val_correct += (classify(logits, masks) == labels).sum().item()
-                        val_total += images.size(0)
-                    val_loss = val_loss_sum / max(val_total, 1)
-                    val_acc = val_correct / max(val_total, 1)
 
-                    logger.log_metric("train/epoch_loss", epoch_train_loss, global_step)
-                    logger.log_metric("train/epoch_acc", epoch_train_acc, global_step)
-                    logger.log_metric("val/loss", val_loss, global_step)
-                    logger.log_metric("val/acc", val_acc, global_step)
+                # ---------- autosave by step ----------
+                save_every = int(getattr(cfg.train, "save_every_steps", 0))
+                if save_every and (global_step % save_every == 0 or stop_flag["stop"]):
+                    step_path = ckpt_dir / f"step_{global_step}.pt"
+                    save_checkpoint(
+                        path=str(step_path),
+                        model=model,
+                        optimizer=opt,
+                        scheduler=scheduler,
+                        scaler=None,
+                        ema=ema,
+                        step=global_step,
+                        epoch=epoch,
+                        config=cfg_to_dict(cfg),
+                        metrics=None,
+                        save_rng_state=getattr(cfg.train, "save_rng_state", True),
+                    )
+                    # refresh latest.pt (hardlink, fallback copy)
+                    try:
+                        latest = ckpt_dir / "latest.pt"
+                        if latest.exists(): latest.unlink()
+                        os.link(step_path, latest)
+                    except Exception:
+                        import shutil as _sh
+                        _sh.copy2(step_path, ckpt_dir / "latest.pt")
+                    prune_old(str(ckpt_dir), int(getattr(cfg.train, "keep_last_k", 3)))
+                    if stop_flag["stop"]:
+                        print("[signal] checkpoint saved; exiting.")
+                        logger.close()
+                        return
+
+                if global_step % save_every == 0:
+                    with torch.no_grad():
+                        model.eval()
+                        ema_model = copy.deepcopy(model)
+                        ema.copy_to(ema_model)
+                        # Validation
+                        val_loss_sum, val_correct, val_total = 0.0, 0, 0
+                        for images, labels, masks in dl_tst:
+                            images, labels, masks = images.to(device), labels.to(device), masks.to(device)
+                            logits = ema_model(images)
+                            loss = criterion(logits, labels, masks)
+                            val_loss_sum += loss.item() * images.size(0)
+                            val_correct += (classify(logits, masks) == labels).sum().item()
+                            val_total += images.size(0)
+                        val_loss = val_loss_sum / max(val_total, 1)
+                        val_acc = val_correct / max(val_total, 1)
+
+                        logger.log_metric("train/epoch_loss", epoch_train_loss, global_step)
+                        logger.log_metric("train/epoch_acc", epoch_train_acc, global_step)
+                        logger.log_metric("val/loss", val_loss, global_step)
+                        logger.log_metric("val/acc", val_acc, global_step)
+
+
+        if epoch % cfg.train.ckpt_interval == 0 or epoch == cfg.train.epochs:
+            # keep your epoch checkpoint, but include optimizer/step/rng to make it resumable too
+            ckpt_path = Path(logger.run_dir) / f"model-epoch{epoch}.pt"
+            save_checkpoint(
+                path=str(ckpt_path),
+                model=model,
+                optimizer=opt,
+                scheduler=scheduler,
+                scaler=None,
+                ema=ema,
+                step=global_step,
+                epoch=epoch,
+                config=cfg_to_dict(cfg),
+                metrics=None,
+                save_rng_state=getattr(cfg.train, "save_rng_state", True),
+            )
 
         if epoch % cfg.train.sample_interval == 0 or epoch == cfg.train.epochs:
             with torch.no_grad():
@@ -288,24 +314,7 @@ def main() -> None:
                 logger.log_metric("train/epoch_acc", epoch_train_acc, global_step)
                 logger.log_metric("val/loss", val_loss, global_step)
                 logger.log_metric("val/acc", val_acc, global_step)
-
-
-        if epoch % cfg.train.ckpt_interval == 0 or epoch == cfg.train.epochs:
-            # keep your epoch checkpoint, but include optimizer/step/rng to make it resumable too
-            ckpt_path = Path(logger.run_dir) / f"model-epoch{epoch}.pt"
-            save_checkpoint(
-                path=str(ckpt_path),
-                model=model,
-                optimizer=opt,
-                scheduler=scheduler,
-                scaler=None,
-                ema=ema,
-                step=global_step,
-                epoch=epoch,
-                config=cfg_to_dict(cfg),
-                metrics=None,
-                save_rng_state=getattr(cfg.train, "save_rng_state", True),
-            )
+                
 
     logger.close()
 

@@ -42,6 +42,10 @@ train:
   save_best_on: "val_acc"             # (TODO) metric name in your eval dict
   save_rng_state: true                 # restore RNG for exact reproducibility
   warmup: 5000
+  min_lr_ratio: 0.1 # For CosineScheduler
+  label_smoothing: 0.05
+  gradient_accumulation_steps: 1
+  ema_decay: 0.9999
 
 # Tracking & Logging
 tracking:
