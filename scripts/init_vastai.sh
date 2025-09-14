@@ -48,7 +48,7 @@ echo "To start working:"
 echo "cd $REPO_DIR"
 echo "PYTHONPATH="$PWD/src" python src/visual/train.py --config configs/default.yaml"
 echo "nohup env PYTHONPATH=/data/DDPM-minimal/src python src/visual/train.py --config configs/default.yaml > log.out 2>&1 &"
-echo "nohup tensorboard --logdir runs --host 0.0.0.0 --port 6007 > tb.out 2>&1 &"
+echo "ln -s $REPO_DIR/runs /workspace/runs"
 
 cd $REPO_DIR
 nohup env PYTHONPATH="$PWD/src" python src/visual/train.py --config configs/default.yaml > log.out 2>&1 &
