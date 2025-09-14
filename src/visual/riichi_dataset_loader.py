@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 
 NUM_TILES = 34 
-NUM_FEATURES = 29
+NUM_FEATURES = 54
 
 # Dataset class
 class RiichiDatasetZarr(Dataset):
