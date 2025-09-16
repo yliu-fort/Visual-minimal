@@ -24,16 +24,29 @@ class EMA:
     def __init__(self, model, decay=0.9999):
         self.model = model
         self.decay = decay
+        model_state = self.model.state_dict(keep_vars=True)
         self.shadow = {
-            name: p.clone().detach()
-            for name, p in model.state_dict().items()
+            name: tensor.detach().clone()
+            for name, tensor in model_state.items()
         }
 
     @torch.no_grad()
     def update(self):
-        for name, param in self.model.state_dict().items():
-            if param.dtype.is_floating_point:
-                self.shadow[name].mul_(self.decay).add_(param, alpha=1 - self.decay)
+        model_state = self.model.state_dict(keep_vars=True)
+        for name, param in model_state.items():
+            if not isinstance(param, torch.Tensor) or not param.dtype.is_floating_point:
+                continue
+
+            param_data = param.detach()
+            shadow = self.shadow.get(name)
+            if shadow is None:
+                shadow = param_data.clone()
+            else:
+                if shadow.device != param_data.device or shadow.dtype != param_data.dtype:
+                    shadow = shadow.to(device=param_data.device, dtype=param_data.dtype)
+
+            shadow.mul_(self.decay).add_(param_data, alpha=1 - self.decay)
+            self.shadow[name] = shadow
 
     def copy_to(self, model):
         model.load_state_dict(self.shadow, strict=False)
@@ -48,10 +61,22 @@ class EMA:
     def load_state_dict(self, state_dict):
         """Restore EMA parameter"""
         self.decay = state_dict["decay"]
-        self.shadow = {
-            k: v.clone().detach()
-            for k, v in state_dict["shadow"].items()
-        }
+        model_state = self.model.state_dict(keep_vars=True)
+        restored = {}
+        for name, tensor in state_dict["shadow"].items():
+            target = model_state.get(name)
+            clone = tensor.clone().detach()
+            if isinstance(target, torch.Tensor):
+                target_data = target.detach()
+                if clone.device != target_data.device or clone.dtype != target_data.dtype:
+                    clone = clone.to(device=target_data.device, dtype=target_data.dtype)
+            restored[name] = clone
+
+        for name, param in model_state.items():
+            if name not in restored and isinstance(param, torch.Tensor):
+                restored[name] = param.detach().clone()
+
+        self.shadow = restored
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
