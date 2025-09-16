@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 
 NUM_TILES = 34 
-NUM_FEATURES = 54
+#NUM_FEATURES = 0
 
 # Dataset class
 class RiichiDatasetZarr(Dataset):
@@ -28,6 +28,7 @@ class RiichiDatasetZarr(Dataset):
         g = zarr.open_group(root, mode="r")
         self.N = g["labels"].shape[0]
         print(g["images"].shape)
+        self.NUM_FEATURES = g["images"].shape[1]
         g.store.close() if hasattr(g.store, "close") else None
 
         if indices is None:
@@ -65,7 +66,7 @@ class RiichiDatasetZarr(Dataset):
         if self.to_float32 and x.dtype != np.float32:
             x = x.astype(np.float32, copy=False)
 
-        x = torch.from_numpy(x).unsqueeze(-1).expand(NUM_FEATURES, NUM_TILES, NUM_TILES).contiguous()  # (C,H,W)
+        x = torch.from_numpy(x).unsqueeze(-1).expand(self.NUM_FEATURES, NUM_TILES, NUM_TILES).contiguous()  # (C,H,W)
         m = torch.from_numpy(m.astype(np.float32, copy=False))
         if self.transform:
             x = self.transform(x)
