@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import DataLoader, Sampler
 from torchvision import transforms
 
-from riichi_dataset_loader import RiichiDatasetZarr
+from visual.riichi_dataset_loader import RiichiDatasetZarr
 
 
 class ChunkedRandomSampler(Sampler[int]):
