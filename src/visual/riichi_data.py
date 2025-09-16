@@ -1,9 +1,90 @@
 from __future__ import annotations
+
+import math
 import os
+from typing import Iterator, Optional, Sized
+
 import torch
-from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+from torch.utils.data import DataLoader, Sampler
+from torchvision import transforms
+
 from riichi_dataset_loader import RiichiDatasetZarr
+
+
+class ChunkedRandomSampler(Sampler[int]):
+    """Memory efficient sampler for very large map-style datasets.
+
+    ``torch.utils.data.RandomSampler`` generates a full random permutation of
+    dataset indices when ``shuffle=True``.  For Riichi we often deal with tens
+    of millions of samples which would require gigabytes of memory just to
+    materialise that permutation.  ``ChunkedRandomSampler`` avoids this by
+    shuffling data in manageable chunks, keeping the memory footprint bounded
+    while still visiting every element exactly once per epoch.
+    """
+
+    _DEFAULT_CHUNK_BYTES = 4 * 1024 * 1024  # ≈4 MiB worth of indices
+
+    def __init__(
+        self,
+        data_source: Sized,
+        *,
+        chunk_size: Optional[int] = None,
+        generator: Optional[torch.Generator] = None,
+    ) -> None:
+        if not isinstance(data_source, Sized):
+            raise TypeError("data_source must implement __len__")
+
+        self.data_source = data_source
+        self.generator = generator
+        self._length = len(data_source)
+
+        if self._length == 0:
+            self._chunk_size = 0
+            self._dtype = torch.int64
+            return
+
+        # Prefer int32 when possible to halve the memory used for indices.
+        self._dtype = torch.int32 if self._length < 2 ** 31 else torch.int64
+
+        if chunk_size is None:
+            element_size = torch.empty((), dtype=self._dtype).element_size()
+            approx = max(1, self._DEFAULT_CHUNK_BYTES // element_size)
+            # Avoid tiny chunks which would negatively impact shuffling quality.
+            chunk_size = max(32_768, approx)
+
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be a positive integer")
+
+        self._chunk_size = min(chunk_size, self._length)
+
+    def __iter__(self) -> Iterator[int]:
+        if self._length == 0:
+            return iter(())
+        return self._generate_indices()
+
+    def _randperm(self, n: int) -> torch.Tensor:
+        if n <= 0:
+            return torch.empty(0, dtype=self._dtype)
+        if self.generator is None:
+            return torch.randperm(n, dtype=self._dtype)
+        return torch.randperm(n, generator=self.generator, dtype=self._dtype)
+
+    def _generate_indices(self) -> Iterator[int]:
+        chunk_size = self._chunk_size
+        total = self._length
+        num_chunks = math.ceil(total / chunk_size)
+
+        for chunk_idx in self._randperm(num_chunks).tolist():
+            start = chunk_idx * chunk_size
+            end = min(start + chunk_size, total)
+            span = end - start
+            if span <= 0:
+                continue
+            for offset in self._randperm(span):
+                yield start + int(offset.item())
+
+    def __len__(self) -> int:  # pragma: no cover - trivial accessor
+        return self._length
 
 # DataLoader workers on some systems may encounter "bus error" crashes when
 # the default shared memory strategy is used.  To avoid relying on `/dev/shm`,
@@ -54,9 +135,7 @@ def build_riichi_dataloader(
     torch.utils.data.DataLoader
         A dataloader yielding batches from ``RiichiDatasetZarr``.
     """
-    tfm = transforms.Compose([
-        transforms.Resize(img_size)
-    ])
+    tfm = transforms.Compose([transforms.Resize(img_size)])
 
     # The dataset stores pre-computed tensors.  ``download``/``img_size`` and
     # ``cf_guidance_p`` are not required but kept to match the interface of the
@@ -81,19 +160,36 @@ def build_riichi_dataloader(
             m = torch.stack(ms, dim=0)
             return x, m
 
-    return DataLoader(
-        ds,
+    loader_kwargs = dict(
         batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        drop_last=True,
-        collate_fn=collate,
-        prefetch_factor=2
-    ), DataLoader(
-        ds_tst,
-        batch_size=batch_size,
-        shuffle=True,
         num_workers=num_workers,
         drop_last=True,
         collate_fn=collate,
     )
+    if num_workers > 0:
+        loader_kwargs["prefetch_factor"] = 2
+        loader_kwargs["persistent_workers"] = True
+
+    train_sampler = ChunkedRandomSampler(
+        ds,
+        generator=torch.Generator().manual_seed(torch.initial_seed()),
+    )
+
+    train_loader = DataLoader(
+        ds,
+        sampler=train_sampler,
+        shuffle=False,
+        **loader_kwargs,
+    )
+
+    eval_loader_kwargs = loader_kwargs.copy()
+    eval_loader_kwargs.pop("prefetch_factor", None)
+    # Evaluation data does not need shuffling, keep worker persistence for
+    # throughput when applicable.
+    eval_loader = DataLoader(
+        ds_tst,
+        shuffle=False,
+        **eval_loader_kwargs,
+    )
+
+    return train_loader, eval_loader
