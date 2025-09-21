@@ -8,7 +8,8 @@ from torch.optim import AdamW
 from visual.config import load_config, cfg_to_dict
 from visual.seed import set_all_seeds
 from visual.logger import RunLogger
-from visual.dataset_loader_web import build_riichi_dataloader
+from visual.riichi_data import build_riichi_dataloader
+from visual.riichi_dataset_loader import NUM_FEATURES
 
 from visual.model import VisualClassifier
 
