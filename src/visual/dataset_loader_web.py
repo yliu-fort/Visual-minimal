@@ -171,12 +171,21 @@ def make_loader(pattern, batch_size, num_workers=4, shard_shuffle=True, class_co
         webdataset_kwargs["resampled"] = True
     else:
         webdataset_kwargs["shardshuffle"] = False
+    # NOTE:
+    #   The feature tensor for each sample is roughly 0.6 MB in float32.
+    #   Using a massive shuffle buffer (100k) as before balloons memory
+    #   usage to tens of GB per worker, which leads to the dataloader
+    #   workers being OOM-killed.  Keep a reasonably large buffer for
+    #   stochasticity, but cap it to something that scales with the
+    #   batch size.
+    sample_shuffle = max(512, int(batch_size) * 32)
+
     ds = (
         wds.WebDataset(pattern, **webdataset_kwargs)
         .shuffle(2000)  # 轻度预热，先打散样本键
         .decode()       # 我们自己解码，不用自动解码器
         .map(DecodeHelper.apply_with_mask if class_conditional else DecodeHelper.apply)
-        .shuffle(100000)  # 片内大缓冲区乱序（关键！）
+        .shuffle(sample_shuffle)  # 片内大缓冲区乱序（关键！）
         .batched(batch_size, partial=False)
     )
     loader = torch.utils.data.DataLoader(
