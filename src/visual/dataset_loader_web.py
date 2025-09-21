@@ -210,3 +210,14 @@ def build_riichi_dataloader(
         prefetch_factor=1
     )
     return ds, ds_tst
+
+if __name__ == "__main__":
+    loader = make_loader(
+        "../MajhongEnv/output/webdataset/train/discard/riichi-{000000..004270}.tar",
+        batch_size=4,
+        num_workers=4,
+        shard_shuffle=True,
+    )
+    for batch in loader:
+        x, y, m = batch
+        print(x.shape, y.shape, m.shape)
