@@ -203,7 +203,7 @@ def build_riichi_dataloader(
     cf_guidance_p: float,
 ):
     ds = make_loader(
-        os.path.join(root, "webdataset/train/discard/riichi-{000000..004270}.tar"),
+        os.path.join(root, "webdataset/train/discard/riichi-{000000..004035}.tar"),
         batch_size=batch_size,
         num_workers=num_workers,
         shard_shuffle=True,
@@ -211,7 +211,7 @@ def build_riichi_dataloader(
         prefetch_factor=2
     )
     ds_tst = make_loader(
-        os.path.join(root, "webdataset/test/discard/riichi-{000000..000042}.tar"),
+        os.path.join(root, "webdataset/test/discard/riichi-{000000..000040}.tar"),
         batch_size=batch_size,
         num_workers=num_workers,
         shard_shuffle=True,
