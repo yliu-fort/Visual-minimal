@@ -214,7 +214,7 @@ def build_riichi_dataloader(
 if __name__ == "__main__":
     loader, _ = build_riichi_dataloader(
         "/data/MajhongEnv/output",
-        batch_size=32,
+        batch_size=16,
         num_workers=4,
         download=True,
         class_conditional=True,
