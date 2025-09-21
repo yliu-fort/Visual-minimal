@@ -137,7 +137,7 @@ class DecodeHelper:
         state, label = decode_record(sample["bin"])
 
         with torch.no_grad():
-            x = DecodeHelper._extractor(state)["x"]
+            x = DecodeHelper._extractor(state)["x"].detach()
         y = torch.asarray(label, dtype=torch.long)
 
         if DecodeHelper._transform:
@@ -153,8 +153,8 @@ class DecodeHelper:
 
         with torch.no_grad():
             out = DecodeHelper._extractor(state)
-            x = out["x"]
-            legal_mask = out["legal_mask"]
+            x = out["x"].detach()
+            legal_mask = out["legal_mask"].detach()
         y = torch.asarray(label, dtype=torch.long)
 
         if DecodeHelper._transform:
@@ -180,7 +180,7 @@ def make_loader(pattern, batch_size, num_workers=4, shard_shuffle=True, class_co
         .batched(batch_size, partial=False)
     )
     loader = torch.utils.data.DataLoader(
-        ds, batch_size=None, num_workers=num_workers, pin_memory=True, prefetch_factor=prefetch_factor
+        ds, batch_size=None, num_workers=num_workers, pin_memory=False, prefetch_factor=prefetch_factor
     )
     return loader
 
