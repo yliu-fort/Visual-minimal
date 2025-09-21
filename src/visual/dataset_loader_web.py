@@ -213,7 +213,7 @@ def build_riichi_dataloader(
 
 if __name__ == "__main__":
     loader = make_loader(
-        "../MajhongEnv/output/webdataset/train/discard/riichi-{000000..004270}.tar",
+        "/data/MajhongEnv/output/webdataset/train/discard/riichi-{000000..004270}.tar",
         batch_size=4,
         num_workers=4,
         shard_shuffle=True,
