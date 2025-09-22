@@ -225,7 +225,7 @@ def build_riichi_dataloader(
     ds_tst = make_loader(
         os.path.join(root, "webdataset/test/discard/riichi-{000000..000040}.tar"),
         batch_size=batch_size,
-        num_workers=num_workers,
+        num_workers=1,
         shard_shuffle=True,
         class_conditional = class_conditional,
         prefetch_factor=1
