@@ -28,7 +28,7 @@ model:
 
 train:
   epochs: 10
-  lr: 2.0e-4
+  lr: 1.0e-3
   weight_decay: 0.0
   grad_clip: 1.0
   log_interval: 50
@@ -36,15 +36,15 @@ train:
   sample_interval: 1
   sample_size: 64
   checkpoint_dir: "runs/checkpoints"   # where to save
-  save_every_steps: 20000               # autosave cadence
+  save_every_steps: 5000               # autosave cadence
   keep_last_k: 3                       # how many checkpoints to retain
   resume_from: "latest"                # "", path/to/ckpt.pt, or "latest"
   save_best_on: "val_acc"             # (TODO) metric name in your eval dict
   save_rng_state: true                 # restore RNG for exact reproducibility
-  warmup: 5000 # For LinearScheduler
+  warmup: 1000 # For LinearScheduler
   min_lr_ratio: 0.1 # For CosineScheduler
   label_smoothing: 0.0
-  gradient_accumulation_steps: 4
+  gradient_accumulation_steps: 64
   ema_decay: 0.9999
   
 
