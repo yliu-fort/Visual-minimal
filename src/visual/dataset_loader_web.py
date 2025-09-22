@@ -169,7 +169,7 @@ class DecodeHelper:
     @staticmethod
     def resize_batch(batch, size=224):
         xs, ys, *rest = batch                        # [B,C,H,W]
-        x = torch.nn.functional.interpolate(xs, (size, size), mode="bilinear", align_corners=False)
+        x = torch.nn.functional.interpolate(xs, (size, 65), mode="nearest", align_corners=False)
         if rest:
             return x, ys, *rest
         return x, ys
