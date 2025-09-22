@@ -175,7 +175,7 @@ def main() -> None:
     cosine = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         opt,
         T_mult=2,
-        T_0=100000,
+        T_0=cfg.data.num_samples // (cfg.data.batch_size * cfg.train.gradient_accumulation_steps),
         eta_min=cfg.train.lr * cfg.train.min_lr_ratio,
     )
     scheduler = torch.optim.lr_scheduler.SequentialLR(opt, schedulers=[warmup, cosine], milestones=[cfg.train.warmup])
