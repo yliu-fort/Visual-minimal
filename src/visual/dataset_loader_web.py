@@ -195,10 +195,10 @@ def make_loader(pattern, batch_size, num_workers=4, shard_shuffle=True, class_co
         .shuffle(2000)  # 轻度预热，先打散样本键, 单条样本非常便宜
         .decode()       # 我们自己解码，不用自动解码器
         .map(DecodeHelper.apply_with_mask if class_conditional else DecodeHelper.apply)
-        #.map(probe_map)                    # ← 在这里测“单样本解码后”的体积～24.6 MB，主要因为有一个resize
+        #.map(probe_map)                    # ← 在这里测“单样本解码后”的体积～0.017 MB
         .shuffle(sample_shuffle)  # 片内大缓冲区乱序（关键！）
         .batched(batch_size, partial=False)
-        .map(DecodeHelper.resize_batch)
+        .map(DecodeHelper.resize_batch)# ← 在这里测“单样本解码后”的体积～24.6 MB，主要因为有一个resize
     )
     loader = torch.utils.data.DataLoader(
         ds, batch_size=None, num_workers=num_workers, pin_memory=True, prefetch_factor=prefetch_factor
