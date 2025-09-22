@@ -21,7 +21,6 @@ DEFAULT_OUTPUT_DIR = os.path.join("output", "webdataset")
 
 # The second decode function
 def decode_record(raw: bytes)->Tuple[RiichiState, int]:
-    import numpy as np
     v = np.frombuffer(raw, dtype=np.uint8)
     off = 0
 
@@ -178,7 +177,7 @@ def make_loader(pattern, batch_size, num_workers=4, shard_shuffle=True, class_co
     #   workers being OOM-killed.  Keep a reasonably large buffer for
     #   stochasticity, but cap it to something that scales with the
     #   batch size.
-    sample_shuffle = min(1024, max(512, int(batch_size) * 8))
+    sample_shuffle = min(65536, max(512, int(batch_size) * 32))
 
     ds = (
         wds.WebDataset(pattern, **webdataset_kwargs)
