@@ -11,6 +11,7 @@ from visual.logger import RunLogger
 from visual.dataset_loader_web import build_riichi_dataloader, NUM_FEATURES
 
 from visual.model import VisualClassifier
+from tqdm import tqdm
 
 from visual.checkpointing import (
     save_checkpoint,
@@ -277,6 +278,7 @@ def main() -> None:
                         logger.close()
                         return
 
+
                 if global_step % save_every == 0:
                     with torch.no_grad():
                         model.eval()
@@ -284,7 +286,7 @@ def main() -> None:
                         ema.copy_to(ema_model)
                         # Validation
                         val_loss_sum, val_correct, val_total = 0.0, 0, 0
-                        for images, labels, masks in dl_tst:
+                        for images, labels, masks in tqdm(dl_tst):
                             images, labels, masks = images.to(device), labels.to(device), masks.to(device)
                             logits = ema_model(images)
                             loss = criterion(logits, labels, masks)
