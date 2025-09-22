@@ -8,6 +8,7 @@ from torchvision import transforms
 import webdataset as wds
 from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, Tuple
+from probe import probe_map
 
 from mahjong_features import RiichiResNetFeatures, RiichiState, PlayerPublic, NUM_TILES, RIVER_LEN, HAND_LEN, DORA_MAX
 
@@ -126,9 +127,11 @@ def decode_record(raw: bytes)->Tuple[RiichiState, int]:
 
     return state, label
 
+
+
 class DecodeHelper:
     _extractor = RiichiResNetFeatures()
-    _transform = transforms.Compose([transforms.Resize(224)])
+    _transform = None
     _target_transform = None
 
     @staticmethod
@@ -136,7 +139,7 @@ class DecodeHelper:
         state, label = decode_record(sample["bin"])
 
         with torch.no_grad():
-            x = DecodeHelper._extractor(state)["x"].detach()
+            x = DecodeHelper._extractor(state)["x"].detach()[...,:1]
         y = torch.asarray(label, dtype=torch.long)
 
         if DecodeHelper._transform:
@@ -152,7 +155,7 @@ class DecodeHelper:
 
         with torch.no_grad():
             out = DecodeHelper._extractor(state)
-            x = out["x"].detach()
+            x = out["x"].detach()[...,:1]
             legal_mask = out["legal_mask"].detach()
         y = torch.asarray(label, dtype=torch.long)
 
@@ -163,6 +166,14 @@ class DecodeHelper:
 
         return x, y, legal_mask
     
+    @staticmethod
+    def resize_batch(batch, size=224):
+        xs, ys, *rest = batch                        # [B,C,H,W]
+        x = torch.nn.functional.interpolate(xs, (size, size), mode="bilinear", align_corners=False)
+        if rest:
+            return x, ys, *rest
+        return x, ys
+    
 def make_loader(pattern, batch_size, num_workers=4, shard_shuffle=True, class_conditional=True, prefetch_factor=1, seed=42):
     # 在旧版 webdataset 兼容接口下，ResampledShards 需要通过 resampled=True 打开，否则会因类型断言失败
     webdataset_kwargs = {"seed": seed}
@@ -171,24 +182,26 @@ def make_loader(pattern, batch_size, num_workers=4, shard_shuffle=True, class_co
     else:
         webdataset_kwargs["shardshuffle"] = False
     # NOTE:
-    #   The feature tensor for each sample is roughly 0.6 MB in float32.
+    #   The feature tensor for each sample is roughly 24.6 MB in float32.
     #   Using a massive shuffle buffer (100k) as before balloons memory
     #   usage to tens of GB per worker, which leads to the dataloader
     #   workers being OOM-killed.  Keep a reasonably large buffer for
     #   stochasticity, but cap it to something that scales with the
     #   batch size.
-    sample_shuffle = min(1024, max(512, int(batch_size) * 8))
+    sample_shuffle = min(65536, max(512, int(batch_size) * 32))
 
     ds = (
         wds.WebDataset(pattern, **webdataset_kwargs)
-        .shuffle(2000)  # 轻度预热，先打散样本键
+        .shuffle(2000)  # 轻度预热，先打散样本键, 单条样本非常便宜
         .decode()       # 我们自己解码，不用自动解码器
         .map(DecodeHelper.apply_with_mask if class_conditional else DecodeHelper.apply)
+        #.map(probe_map)                    # ← 在这里测“单样本解码后”的体积～24.6 MB，主要因为有一个resize
         .shuffle(sample_shuffle)  # 片内大缓冲区乱序（关键！）
         .batched(batch_size, partial=False)
+        .map(DecodeHelper.resize_batch)
     )
     loader = torch.utils.data.DataLoader(
-        ds, batch_size=None, num_workers=num_workers, pin_memory=False, prefetch_factor=prefetch_factor
+        ds, batch_size=None, num_workers=num_workers, pin_memory=True, prefetch_factor=prefetch_factor
     )
     return loader
 
@@ -207,7 +220,7 @@ def build_riichi_dataloader(
         num_workers=num_workers,
         shard_shuffle=True,
         class_conditional = class_conditional,
-        prefetch_factor=2
+        prefetch_factor=4
     )
     ds_tst = make_loader(
         os.path.join(root, "webdataset/test/discard/riichi-{000000..000040}.tar"),
@@ -220,14 +233,13 @@ def build_riichi_dataloader(
     return ds, ds_tst
 
 if __name__ == "__main__":
-    loader, _ = build_riichi_dataloader(
-        "/data/MajhongEnv/output",
+    loader = make_loader(
+        "../MajhongEnv/output/webdataset/train/discard/riichi-{000000..000007}.tar",
         batch_size=16,
-        num_workers=4,
-        download=True,
-        class_conditional=True,
-        img_size=224,
-        cf_guidance_p=0.0
+        num_workers=1,
+        shard_shuffle=True,
+        class_conditional = True,
+        prefetch_factor=2
     )
     for i, batch in enumerate(loader):
         x, y, m = batch
