@@ -32,6 +32,7 @@ from shanten_dp import compute_ukeire_advanced
 # 27..33: winds+dragons [East,South,West,North,White,Green,Red]
 
 NUM_TILES = 34
+WIDTH = 1
 NUM_FEATURES = 128
 RIVER_LEN = 24
 HAND_LEN = 14
@@ -150,10 +151,12 @@ class RiichiState:
 
     # Legal actions (optional)
     legal_discards_mask: Optional[Sequence[int]] = None  # len 34, 0/1
+    legal_actions_mask: Optional[Sequence[int]] = None  # len 253, 0/1
 
     # Last droped tiles (for naki)
     last_draw_136: int = -1
     last_discarded_tile_136: int = -1
+    last_discarder: int = -1
 
     # Computed features
     visible_counts: Sequence[int] = None
@@ -244,11 +247,11 @@ class RiichiResNetFeatures(torch.nn.Module):
     @staticmethod
     def _broadcast_row(v: torch.Tensor) -> torch.Tensor:
         # v: (34,)
-        return v.view(NUM_TILES, 1).expand(NUM_TILES, NUM_TILES)
+        return v.view(NUM_TILES, 1).expand(NUM_TILES, WIDTH)
 
     @staticmethod
     def _const_plane(val: float) -> torch.Tensor:
-        return torch.full((NUM_TILES, NUM_TILES), float(val))
+        return torch.full((NUM_TILES, WIDTH), float(val))
 
     @staticmethod
     def _one_hot_plane(index: int, num: int) -> torch.Tensor:
@@ -554,15 +557,76 @@ class RiichiResNetFeatures(torch.nn.Module):
         # --- Features end ---
         x = torch.stack(planes, dim=0)  # (C,34,34)
 
+        legal_actions = torch.as_tensor(state.legal_actions_mask)
+
         return {
             "x": x,                              # model input
-            "legal_mask": legal,                 # (34,)
+            "legal_mask": legal_actions,                 # (34,)
             "meta": {
                 "num_channels": x.shape[0],
-                "spec": "baseline+intermediate-54ch",
+                "spec": "baseline-128ch-253ac",
             },
         }
 
+
+def get_action_index(t_34, type):
+    """Map an action description to the flat action index used in ``print_all_actions``."""
+    """t_34 can be the tile index or the (t_34, called_index) for chi. """
+    action_type = type.lower() if isinstance(type, str) else type
+
+    if action_type == "discard":
+        return int(t_34)
+
+    if action_type == "riichi":
+        return 34 + int(t_34)
+
+    if action_type == "chi":
+        base, called = t_34
+        base, called = int(base), int(called)
+        suit = base // 9
+        offset = 68 + suit * 15
+        if called == 0:
+            local_a = base + 1
+            return offset + local_a
+        elif called == 1:
+            local_a = base
+            return offset + 8 + local_a
+        elif called == 2:
+            local_a = base
+            return offset + local_a
+        raise ValueError(f"Unsupported chi shape: {t_34}")
+
+    if action_type == "pon":
+        base, called = t_34
+        base = int(base)
+        return 113 + base
+
+    if action_type == "kan":
+        base, called = t_34
+        base = int(base)
+        if called != None:
+            return 147 + base
+        else:
+            return 215 + base
+
+    if action_type == "chakan":
+        base, called = t_34
+        base = int(base)
+        return 181 + base
+
+    if action_type == "ryuukyoku":
+        return 249
+
+    if action_type == "ron":
+        return 250
+
+    if action_type == "tsumo":
+        return 251
+
+    if action_type in ("cancel", "pass"):
+        return 252
+
+    raise ValueError(f"Unsupported action type: {type}")
 
 # ----------------------------
 # Mini example / smoke test
@@ -584,9 +648,11 @@ if __name__ == "__main__":
     state.hand_counts[4] = 2  # m5
     state.hand_counts[27] = 1 # East
     state.legal_discards_mask = [1 if c>0 else 0 for c in state.hand_counts]
+    state.legal_actions_mask = [1 if c<34 else 0 for c in range(253)]
 
     extractor = RiichiResNetFeatures()
     out = extractor(state)
     x = out["x"]
+    legal = out["legal_mask"]
     print("Feature tensor:", x.shape, "channels=", x.shape[0])
-    print("Legal mask sum:", out["legal_mask"].sum().item())
+    print("Legal mask", legal.shape, " sum:", out["legal_mask"].sum().item())

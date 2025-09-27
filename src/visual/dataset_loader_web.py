@@ -7,7 +7,7 @@ import torch
 from torchvision import transforms
 import webdataset as wds
 from dataclasses import asdict, is_dataclass
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, List
 from probe import probe_map
 
 from mahjong_features import RiichiResNetFeatures, RiichiState, PlayerPublic, NUM_TILES, RIVER_LEN, HAND_LEN, DORA_MAX
@@ -21,7 +21,7 @@ DEFAULT_OUTPUT_DIR = os.path.join("output", "webdataset")
 # 写完后，用 webdataset 的 make_index 生成 .idx 文件（命令行或 python 调用均可）
 
 # The second decode function
-def decode_record(raw: bytes)->Tuple[RiichiState, int]:
+def decode_record(raw: bytes)->Tuple[RiichiState, int, List]:
     v = np.frombuffer(raw, dtype=np.uint8)
     off = 0
 
@@ -65,11 +65,17 @@ def decode_record(raw: bytes)->Tuple[RiichiState, int]:
     bits = int.from_bytes(legal_bytes, "little")
     legal_mask = [(bits >> i) & 1 for i in range(NUM_TILES)]
 
+    # Legal actions mask: 32 bytes (253 little-endian bits)
+    legal_actions_bytes = take(32)
+    legal_actions_mask_bits = np.unpackbits(legal_actions_bytes, bitorder="little")
+    legal_actions_mask = legal_actions_mask_bits[:253].astype(int).tolist()
+
     # Last tiles (uint16 little-endian with -1 offset)
-    u16 = v[off:off+4].view(dtype="<u2")
+    u16 = v[off:off+6].view(dtype="<u2")
     last_draw = int(u16[0]) - 1
     last_disc = int(u16[1]) - 1
-    off += 4
+    last_disr = int(u16[2]) - 1
+    off += 6
 
     # Build RiichiState
     left = PlayerPublic(
@@ -117,15 +123,17 @@ def decode_record(raw: bytes)->Tuple[RiichiState, int]:
         aka5p=bool(aka_flags & 0x2),
         aka5s=bool(aka_flags & 0x4),
         legal_discards_mask=legal_mask,
+        legal_actions_mask=legal_actions_mask,
         last_draw_136=last_draw,
         last_discarded_tile_136=last_disc,
+        last_discarder=last_disr,
         visible_counts=visible_counts,
         remaining_counts=remaining_counts,
         shantens=shantens,
         ukeires=ukeires,
     )
 
-    return state, label
+    return state, label, legal_actions_mask
 
 
 
@@ -136,7 +144,7 @@ class DecodeHelper:
 
     @staticmethod
     def apply(sample: Dict[str, Any]) -> Tuple[torch.Tensor, torch.Tensor]:
-        state, label = decode_record(sample["bin"])
+        state, label, _ = decode_record(sample["bin"])
 
         with torch.no_grad():
             x = DecodeHelper._extractor(state)["x"].detach()[...,:1]
@@ -151,20 +159,19 @@ class DecodeHelper:
 
     @staticmethod
     def apply_with_mask(sample: Dict[str, Any]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        state, label = decode_record(sample["bin"])
+        state, label, mask = decode_record(sample["bin"])
 
         with torch.no_grad():
-            out = DecodeHelper._extractor(state)
-            x = out["x"].detach()[...,:1]
-            legal_mask = out["legal_mask"].detach()
+            x = DecodeHelper._extractor(state)["x"].detach()[...,:1]
         y = torch.asarray(label, dtype=torch.long)
+        m = torch.asarray(mask, dtype=torch.long)
 
         if DecodeHelper._transform:
             x = DecodeHelper._transform(x)
         if DecodeHelper._target_transform:
             y = DecodeHelper._target_transform(y)
 
-        return x, y, legal_mask
+        return x, y, m
     
     @staticmethod
     def resize_batch(batch, size=224):
