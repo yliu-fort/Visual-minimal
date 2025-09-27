@@ -1,5 +1,5 @@
 run:
-  experiment_name: "resnet50_riichi_discard"
+  experiment_name: "resnet50_riichi"
   output_dir: "runs"
   seed: 42
   device: "auto"
@@ -23,7 +23,7 @@ data:
 model:
   name: "resnet50"
   common:
-    num_classes: 34
+    num_classes: 253
     pretrained: false
 
 train:
