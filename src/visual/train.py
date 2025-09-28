@@ -8,7 +8,12 @@ from torch.optim import AdamW
 from visual.config import load_config, cfg_to_dict
 from visual.seed import set_all_seeds
 from visual.logger import RunLogger
-from visual.dataset_loader_web import build_riichi_dataloader, NUM_FEATURES
+from visual.dataset_loader_web import (
+    build_riichi_dataloader,
+    NUM_FEATURES,
+    compute_resize_shape,
+    resize_batch_on_device,
+)
 
 from visual.model import VisualClassifier
 from tqdm import tqdm
@@ -155,6 +160,7 @@ def main() -> None:
             cf_guidance_p=cfg.data.cfg[cfg.data.name]["cf_guidance_p"],
         )
         sample_shape = (cfg.train.sample_size, NUM_FEATURES, cfg.data.cfg[cfg.data.name]["img_size"], cfg.data.cfg[cfg.data.name]["img_size"])
+        target_resize = compute_resize_shape(cfg.data.cfg[cfg.data.name]["img_size"])
     else:
         return
     
@@ -215,7 +221,10 @@ def main() -> None:
 
         opt.zero_grad(set_to_none=True)
         for it, (images, labels, masks) in enumerate(dl):
-            images, labels, masks = images.to(device), labels.to(device), masks.to(device)
+            images = images.to(device, non_blocking=True)
+            images = resize_batch_on_device(images, target_resize)
+            labels = labels.to(device, non_blocking=True)
+            masks = masks.to(device, non_blocking=True)
             logits = model(images)
             loss = criterion(logits, labels, masks)
 
@@ -287,7 +296,10 @@ def main() -> None:
                         # Validation
                         val_loss_sum, val_correct, val_total = 0.0, 0, 0
                         for images, labels, masks in tqdm(dl_tst):
-                            images, labels, masks = images.to(device), labels.to(device), masks.to(device)
+                            images = images.to(device, non_blocking=True)
+                            images = resize_batch_on_device(images, target_resize)
+                            labels = labels.to(device, non_blocking=True)
+                            masks = masks.to(device, non_blocking=True)
                             logits = ema_model(images)
                             loss = criterion(logits, labels, masks)
                             val_loss_sum += loss.item() * images.size(0)
@@ -327,7 +339,10 @@ def main() -> None:
                 # Validation
                 val_loss_sum, val_correct, val_total = 0.0, 0, 0
                 for images, labels, masks in dl_tst:
-                    images, labels, masks = images.to(device), labels.to(device), masks.to(device)
+                    images = images.to(device, non_blocking=True)
+                    images = resize_batch_on_device(images, target_resize)
+                    labels = labels.to(device, non_blocking=True)
+                    masks = masks.to(device, non_blocking=True)
                     logits = ema_model(images)
                     loss = criterion(logits, labels, masks)
                     val_loss_sum += loss.item() * images.size(0)
