@@ -590,15 +590,16 @@ def get_action_index(t_34, type):
         base, called = t_34
         base, called = int(base), int(called)
         suit = base // 9
+        rank = base % 9
         offset = 68 + suit * 15
         if called == 0:
-            local_a = base + 1
+            local_a = rank + 1
             return offset + local_a
         elif called == 1:
-            local_a = base
+            local_a = rank
             return offset + 8 + local_a
         elif called == 2:
-            local_a = base
+            local_a = rank
             return offset + local_a
         raise ValueError(f"Unsupported chi shape: {t_34}")
 
