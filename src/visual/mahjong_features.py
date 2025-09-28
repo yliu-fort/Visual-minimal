@@ -104,6 +104,8 @@ class PlayerPublic:
     meld_counts: Optional[Sequence[int]] = None    # length 34 (exposed tiles from chi/pon/kan)
     riichi: bool = False
     riichi_turn: int = 0  # turn number when riichi declared (if any)
+    score: int = 0
+    rank: int = -1
 
 
 @dataclass
@@ -142,6 +144,10 @@ class RiichiState:
     turn_number: int = 0       # approx 0..24 (normalize later)
     honba: int = 0
     riichi_sticks: int = 0
+
+    # Score and rank
+    score: int = 0
+    rank: int = -1
 
     # Dora
     dora_indicators: Sequence[int] = field(default_factory=list)
@@ -561,7 +567,7 @@ class RiichiResNetFeatures(torch.nn.Module):
 
         return {
             "x": x,                              # model input
-            "legal_mask": legal_actions,                 # (34,)
+            "legal_mask": legal_actions,                 # (253,)
             "meta": {
                 "num_channels": x.shape[0],
                 "spec": "baseline-128ch-253ac",
@@ -627,6 +633,123 @@ def get_action_index(t_34, type):
         return 252
 
     raise ValueError(f"Unsupported action type: {type}")
+
+
+def get_action_from_index(i):
+    # discard
+    if i < 34:
+        return (i, False)
+
+    # riichi
+    elif i < 68:
+        return (i-34, True)
+
+    # chi
+    elif i < 113:
+        pouts = []
+        for r in range(3):
+            for j in range(8):
+                s = (r*9+j, r*9+j+1)
+                pouts.append((s, True))
+            for j in range(7):
+                s = (r*9+j, r*9+j+2)
+                pouts.append((s, True))
+        return pouts[i-68]
+
+    # pon
+    elif i < 147:
+        k = (i-113, i-113)
+        return (k, True)
+
+    # kan
+    elif i < 181:
+        k = (i-147, i-147, i-147)
+        return (k, True)
+
+    # chakan
+    elif i < 215:
+        k = (i-181,)
+        return (k, True)
+
+    # ankan
+    elif i < 249:
+        k = (i-215, i-215, i-215, i-215)
+        return (k, True)
+
+    # ryuukyoku
+    elif i == 249:
+        return (255, True)
+
+    # ron
+    elif i == 250:
+        return (255, True)
+
+    # tsumo
+    elif i == 251:
+        return (255, True)
+
+    # cancel
+    elif i == 252:
+        return (255, False)
+
+    else:
+        return (-1, False)
+
+
+def get_actions():
+    pouts = []
+
+    # discard
+    for i in range(34):
+        pouts.append((i, False))
+
+    # riichi
+    for i in range(34):
+        pouts.append((i, True))
+
+    # chi
+    for r in range(3):
+        for i in range(8):
+            s = (r*9+i, r*9+i+1)
+            pouts.append((s, True))
+        for i in range(7):
+            s = (r*9+i, r*9+i+2)
+            pouts.append((s, True))
+
+    # pon
+    for i in range(34):
+        k = (i, i)
+        pouts.append((k, True))
+
+    # kan
+    for i in range(34):
+        k = (i, i, i)
+        pouts.append((k, True))
+
+    # chakan
+    for i in range(34):
+        k = i
+        pouts.append((k, True))
+
+    # ankan
+    for i in range(34):
+        k = i
+        pouts.append((k, True))
+
+    # ryuukyoku
+    pouts.append((255, True))
+
+    # ron
+    pouts.append((255, True))
+
+    # tsumo
+    pouts.append((255, True))
+
+    # cancel
+    pouts.append((255, False))
+
+    return pouts
+
 
 # ----------------------------
 # Mini example / smoke test
