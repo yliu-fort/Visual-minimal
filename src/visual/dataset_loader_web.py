@@ -11,10 +11,9 @@ from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, Tuple, List, Optional
 from probe import probe_map
 
-from mahjong_features import RiichiResNetFeatures, RiichiState, PlayerPublic, NUM_TILES, RIVER_LEN, HAND_LEN, DORA_MAX
+from mahjong_features import RiichiResNetFeatures, RiichiState, PlayerPublic, NUM_TILES, RIVER_LEN, HAND_LEN, DORA_MAX, NUM_FEATURES
 
 
-NUM_FEATURES = 128
 # Resize targets are anisotropic; historically the height 224 pairs with width 65.
 RESIZE_BASE_HEIGHT = 224
 RESIZE_BASE_WIDTH = 65

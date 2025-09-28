@@ -33,7 +33,7 @@ from shanten_dp import compute_ukeire_advanced
 
 NUM_TILES = 34
 WIDTH = 1
-NUM_FEATURES = 128
+NUM_FEATURES = 136
 RIVER_LEN = 24
 HAND_LEN = 14
 DORA_MAX = 5
@@ -223,8 +223,10 @@ class RiichiResNetFeatures(torch.nn.Module):
 
         # 127 possible discards & its shantens
         # 128 possible discards & its ukeires
+        # 129-132 scores-4ch-{O,L,C,R}
+        # 133-136 ranks-4ch-{O,L,C,R}
 
-    Total: 128 channels
+    Total: 136 channels
 
     Notes:
       - Rivers can be provided as ordered lists; if `river_counts` is None
@@ -348,6 +350,18 @@ class RiichiResNetFeatures(torch.nn.Module):
 
         return RiichiResNetFeatures._to_tensor_1d(shantens), RiichiResNetFeatures._to_tensor_1d(ukeires)
 
+    @staticmethod
+    def _quantize_score(score):
+        if score < 100:
+            quantized_score = 0
+        elif score < 250:
+            quantized_score = 1
+        elif score < 500:
+            quantized_score = 2
+        else:
+            quantized_score = 3
+        return quantized_score
+        
     # ---------- core ----------
     def forward(self, state: RiichiState) -> Dict[str, torch.Tensor]:
         """Construct feature planes for a given :class:`RiichiState`.
@@ -559,6 +573,14 @@ class RiichiResNetFeatures(torch.nn.Module):
             ukeires = ukeires.clamp(min=0, max=60)
         planes.append(self._broadcast_row(shantens / 8.0)) # 127 possible discards & its shantens
         planes.append(self._broadcast_row(ukeires / 60.0)) # 128 possible discards & its ukeires
+        
+        planes.append(self._const_plane(RiichiResNetFeatures._quantize_score(state.score) / 3.0))        # 129 - 132 scores
+        for opp in opps:
+            planes.append(self._const_plane(RiichiResNetFeatures._quantize_score(opp.score) / 3.0))
+
+        planes.append(self._const_plane(state.rank / 3.0))         # 133 - 136 ranks
+        for opp in opps:
+            planes.append(self._const_plane(opp.rank / 3.0))
 
         # --- Features end ---
         x = torch.stack(planes, dim=0)  # (C,34,34)
@@ -570,7 +592,7 @@ class RiichiResNetFeatures(torch.nn.Module):
             "legal_mask": legal_actions,                 # (253,)
             "meta": {
                 "num_channels": x.shape[0],
-                "spec": "baseline-128ch-253ac",
+                "spec": "baseline-136ch-253ac",
             },
         }
 
