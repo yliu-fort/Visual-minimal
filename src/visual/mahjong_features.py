@@ -354,12 +354,14 @@ class RiichiResNetFeatures(torch.nn.Module):
     def _quantize_score(score):
         if score < 100:
             quantized_score = 0
-        elif score < 250:
+        elif score < 200:
             quantized_score = 1
-        elif score < 500:
+        elif score < 300:
             quantized_score = 2
-        else:
+        elif score < 500:
             quantized_score = 3
+        else:
+            quantized_score = 4
         return quantized_score
         
     # ---------- core ----------
@@ -574,9 +576,9 @@ class RiichiResNetFeatures(torch.nn.Module):
         planes.append(self._broadcast_row(shantens / 8.0)) # 127 possible discards & its shantens
         planes.append(self._broadcast_row(ukeires / 60.0)) # 128 possible discards & its ukeires
         
-        planes.append(self._const_plane(RiichiResNetFeatures._quantize_score(state.score) / 3.0))        # 129 - 132 scores
+        planes.append(self._const_plane(RiichiResNetFeatures._quantize_score(state.score) / 4.0))        # 129 - 132 scores
         for opp in opps:
-            planes.append(self._const_plane(RiichiResNetFeatures._quantize_score(opp.score) / 3.0))
+            planes.append(self._const_plane(RiichiResNetFeatures._quantize_score(opp.score) / 4.0))
 
         planes.append(self._const_plane(state.rank / 3.0))         # 133 - 136 ranks
         for opp in opps:
