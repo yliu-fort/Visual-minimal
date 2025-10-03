@@ -31,6 +31,7 @@ from shanten_dp import compute_ukeire_advanced
 # 18..26: s1-s9 (bamboo/souzu)
 # 27..33: winds+dragons [East,South,West,North,White,Green,Red]
 
+NUM_ACTIONS = 262
 NUM_TILES = 34
 WIDTH = 1
 NUM_FEATURES = 136
@@ -657,6 +658,33 @@ def get_action_index(t_34, type):
     if action_type in ("cancel", "pass"):
         return 252
 
+    if action_type == ("pass", "riichi"):
+        return 253
+
+    if action_type == ("pass", "chi"):
+        return 254
+
+    if action_type == ("pass", "pon"):
+        return 255
+    
+    if action_type == ("pass", "kan"):
+        return 256
+    
+    if action_type == ("pass", "ankan"):
+        return 257
+    
+    if action_type == ("pass", "chakan"):
+        return 258
+
+    if action_type == ("pass", "ryuukyoku"):
+        return 259
+    
+    if action_type == ("pass", "ron"):
+        return 260
+
+    if action_type == ("pass", "tsumo"):
+        return 261
+    
     raise ValueError(f"Unsupported action type: {type}")
 
 
@@ -717,6 +745,10 @@ def get_action_from_index(i):
     elif i == 252:
         return (255, False)
 
+    # cancel (action group specific)
+    elif 252 < i < 262:
+        return (255, False)
+    
     else:
         return (-1, False)
 
@@ -772,6 +804,10 @@ def get_actions():
 
     # cancel
     pouts.append((255, False))
+
+    # cancel (action group specific)
+    for _ in range(9):
+        pouts.append((255, False))
 
     return pouts
 
