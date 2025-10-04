@@ -11,6 +11,7 @@ from visual.logger import RunLogger
 from visual.dataset_loader_web import (
     build_riichi_dataloader,
     NUM_FEATURES,
+    NUM_ACTIONS,
     compute_resize_shape,
     resize_batch_on_device,
 )
@@ -167,6 +168,15 @@ def main() -> None:
     # Model & Diffusion
     name = getattr(cfg.model, "name", "resnet18")
     common = asdict_maybe(getattr(cfg.model, "common", None))
+    if cfg.data.name == "riichi" and cfg.data.cfg[cfg.data.name]["class_conditional"]:
+        current_num_classes = common.get("num_classes")
+        if current_num_classes not in (None, NUM_ACTIONS):
+            print(
+                f"[train] Overriding num_classes={current_num_classes} with NUM_ACTIONS={NUM_ACTIONS} "
+                "to match dataset mask."
+            )
+        common["num_classes"] = NUM_ACTIONS
+
     model = VisualClassifier(backbone=name, in_chans=NUM_FEATURES, **common).to(device)
     criterion = MaskedCrossEntropy(label_smoothing=cfg.train.label_smoothing)
     opt = AdamW(model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay)
