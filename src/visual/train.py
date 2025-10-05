@@ -118,7 +118,20 @@ class MaskedCrossEntropy(torch.nn.Module):
         neg_large = -torch.finfo(logits.dtype).max  # 避免混合精度下的数值问题
         masked_logits = logits.masked_fill(mask <= 0, neg_large)
 
-        return torch.nn.functional.cross_entropy(masked_logits, targets, label_smoothing=self.label_smoothing)
+        # Weights
+        '''
+        33 0.04544543293576716
+        pass-riichi 0.7687883809338142
+        pass-chi 0.8847372733315813
+        pass-pon 0.7283758301221612
+        pass-kan 0.9715639810426541
+        pass-chakan 0.8113207547169812
+        pass-ankan 0.875
+        '''
+        weights = torch.ones_like(mask)
+        weights[253] = 1.0 - 0.7687883809338142
+
+        return torch.nn.functional.cross_entropy(masked_logits, targets, weight=weights, label_smoothing=self.label_smoothing)
     
 
 def classify(logits: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
