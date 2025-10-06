@@ -86,7 +86,7 @@ class EMA:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
-    p.add_argument("--config", type=str, default="configs/riichi.yaml")
+    p.add_argument("--config", type=str, default="configs/default.yaml")
     return p.parse_args()
 
 def asdict_maybe(obj):
@@ -128,10 +128,8 @@ class MaskedCrossEntropy(torch.nn.Module):
         pass-chakan 0.8113207547169812
         pass-ankan 0.875
         '''
-        weights = torch.ones((logits.shape[-1],)).to(logits.device)
-        weights[253] = 1.0 - 0.7687883809338142
 
-        return torch.nn.functional.cross_entropy(masked_logits, targets, weight=weights, label_smoothing=self.label_smoothing)
+        return torch.nn.functional.cross_entropy(masked_logits, targets, label_smoothing=self.label_smoothing)
     
 
 def classify(logits: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:

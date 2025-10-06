@@ -9,7 +9,7 @@ run:
 
 data:
   name: "riichi"
-  num_samples: 65000000
+  num_samples: 85000000
   batch_size: 64
   num_workers: 6
   cfg:
@@ -23,7 +23,7 @@ data:
 model:
   name: "resnet50"
   common:
-    num_classes: 253
+    num_classes: 262
     pretrained: false
 
 train:
